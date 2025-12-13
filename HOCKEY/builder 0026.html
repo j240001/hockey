@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>BRAIN BUILDER V 0026 (Registry)</title>
+<script src="node_registry.js"></script> <style>
+    /* GLOBAL BOX SIZING FIX */
+    * { box-sizing: border-box; }
+    :root { --bg: #1e1e2e; --panel: #252535; --node: #333344; --accent: #7aa2f7; --border: #444; }
+    body { background: var(--bg); color: #c0caf5; font-family: 'Segoe UI', monospace; display: flex; gap: 10px; padding: 10px; height: 98vh; overflow: hidden; font-size: 12px; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #111; }
+    ::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
+    .panel { background: var(--panel); padding: 10px; border-radius: 4px; width: 240px; min-width: 240px; display: flex; flex-direction: column; border: 1px solid var(--border); }
+    .panel h3 { margin: 0 0 10px 0; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 5px; font-size: 14px; }
+    .workspace { flex: 1; background: #16161e; border: 1px solid var(--border); border-radius: 4px; padding: 10px; overflow: auto; display: flex; gap: 10px; min-width: 0; }
+    .tree-column { flex: 1; min-width: 180px; display: flex; flex-direction: column; border-right: 1px dashed #333; padding-right: 5px; padding-bottom: 500px; }
+    .tree-column:last-child { border-right: none; }
+    .tree-column h4 { text-align: center; color: #7dcfff; background: #222; padding: 8px; margin: 0 0 10px 0; border-radius: 3px; font-size: 13px; font-weight: bold; }
+    .main-root { flex: 1; min-height: 150px; border: 2px dashed #333; background: rgba(255,255,255,0.02); border-radius: 4px; margin-bottom: 5px; transition: all 0.2s; cursor: pointer; }
+    .main-root:hover { background: rgba(255,255,255,0.05); border-color: #555; }
+    .tree-block { padding-left: 12px; min-height: 10px; margin-left: 4px; padding-bottom: 10px; }
+    .tree-block:not(.main-root) { border-left: 1px solid #555; }
+    .btn-move { cursor: pointer; color: #666; font-size: 10px; padding: 2px 4px; border-radius: 3px; background: rgba(0,0,0,0.2); }
+    .btn-move:hover { color: #fff; background: var(--accent); }
+    .node { background: var(--node); padding: 4px 8px; border-radius: 3px; margin: 4px 0; display: flex; align-items: center; justify-content: space-between; cursor: pointer; border: 1px solid #444; font-size: 11px; transition: all 0.1s; flex-wrap: wrap; }
+    .node:hover { border-color: var(--accent); background: #3b3b4d; }
+    .node span.del { color: #f7768e; font-weight: bold; cursor: pointer; padding: 0 6px; font-size: 14px; }
+    .node span.label { font-weight: 700; pointer-events: none; letter-spacing: 0.5px; }
+    .node[data-cat="struct"] { border-left: 3px solid #bb9af7; }
+    .node[data-cat="cond"] { border-left: 3px solid #e0af68; }
+    .node[data-cat="act"] { border-left: 3px solid #9ece6a; }
+    button.btn { background: #3b4261; color: white; border: none; padding: 6px; margin-bottom: 3px; width: 100%; text-align: left; cursor: pointer; border-radius: 3px; font-size: 11px; }
+    button.btn:hover { background: var(--accent); color:#111; }
+    button.btn:disabled { background: #1a1a20; color: #444; cursor: not-allowed; border-left: 3px solid #332222; opacity: 0.6; }
+    .palette-header { color:#666; font-size:10px; margin-top:10px; margin-bottom:4px; font-weight:bold; }
+    #inspectorFields label { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+    #inspectorFields input { background: #111; border: 1px solid #555; color: #fff; width: 60px; padding: 2px 5px; border-radius: 3px; text-align: right; }
+    .export-area { width: 100%; flex: 1; background: #111; color: #73daca; border: 1px solid var(--border); padding: 10px; font-family: monospace; resize: none; font-size: 10px; border-radius: 4px; margin-top: 5px; }
+    .active-drop { background: rgba(122,162,247,0.15); border-color: var(--accent); }
+</style>
+</head>
+<body>
+
+<div class="panel">
+    <h3>Node Palette</h3>
+    <div id="paletteArea" style="overflow-y:auto; flex:1;"></div>
+</div>
+
+<div class="workspace" id="workspace">
+    <div class="tree-column"> <h4 style="color:#7dcfff">Center (C)</h4> <div id="rootC" class="tree-block main-root"></div> </div>
+    <div class="tree-column"> <h4 style="color:#9ece6a">Left Wing (LW)</h4> <div id="rootLW" class="tree-block main-root"></div> </div>
+    <div class="tree-column"> <h4 style="color:#9ece6a">Right Wing (RW)</h4> <div id="rootRW" class="tree-block main-root"></div> </div>
+    <div class="tree-column"> <h4 style="color:#e0af68">Left Def (LD)</h4> <div id="rootLD" class="tree-block main-root"></div> </div>
+    <div class="tree-column"> <h4 style="color:#e0af68">Right Def (RD)</h4> <div id="rootRD" class="tree-block main-root"></div> </div>
+</div>
+
+<div class="panel">
+    <div style="flex: 0 0 auto; margin-bottom: 10px; border-bottom: 1px solid #444; padding-bottom: 10px;">
+        <h3>Inspector</h3>
+        <div id="inspectorFields" style="font-size:11px;color:#aaa;"><i>Select a node to edit.</i></div>
+        <div id="contextDebug" style="font-size:10px; color:#aaa; text-align:center; margin-top:8px; font-family:monospace;">Context: ANY</div>
+    </div>
+    <div style="flex: 0 0 auto; margin-bottom: 20px; border-bottom: 1px solid #444; padding-bottom: 10px;">
+        <h3>Team Settings</h3>
+        <input type="text" id="metaStratName" placeholder="Strategy Name" value="MyStrategy" style="width:100%;background:#111;border:1px solid #555;color:#fff;padding:3px;margin-bottom:5px;">
+        <div style="display:flex; gap:5px;">
+            <input type="text" id="metaTeamName" placeholder="Team" value="Custom" style="flex:2;background:#111;border:1px solid #555;color:#fff;padding:3px;">
+            <input type="text" id="metaCode" placeholder="ABC" value="CST" maxlength="3" style="flex:1;background:#111;border:1px solid #555;color:#fff;padding:3px;text-align:center;">
+        </div>
+        <div style="display:flex; gap:10px; align-items:center; margin-top:5px;">
+            <input type="color" id="metaColor1" value="#b80000" style="border:none; width:40px; height:20px; cursor:pointer; padding:0; background:none;">
+            <input type="color" id="metaColor2" value="#ff9d00" style="border:none; width:40px; height:20px; cursor:pointer; padding:0; background:none;">
+        </div>
+    </div>
+    <h3>Output</h3>
+    <div style="display:flex; gap:5px; margin-bottom:5px;">
+        <button class="btn" onclick="saveLayout()" style="background:#41a6b5; font-weight:bold;">💾 Save JSON</button>
+        <button class="btn" onclick="document.getElementById('fileInput').click()" style="background:#9d7cd8; font-weight:bold;">📂 Load</button>
+        <input type="file" id="fileInput" style="display:none" onchange="loadLayout(this)">
+    </div>
+    <button class="btn" style="background:var(--accent); color:#111; font-weight:bold;" onclick="exportBT()">GENERATE CODE</button>
+    <textarea id="output" class="export-area"></textarea>
+</div>
+
+<script>
+// --- PALETTE GENERATION ---
+(function initPalette() {
+    const area = document.getElementById('paletteArea');
+    if(typeof NODE_REGISTRY === 'undefined') { area.innerHTML = "<div style='color:red'>Error: node_registry.js missing</div>"; return; }
+    
+    PALETTE_LAYOUT.forEach(item => {
+        if (item.header) {
+            const p = document.createElement('div');
+            p.className = 'palette-header';
+            p.innerText = item.header;
+            area.appendChild(p);
+        } else {
+            const type = item;
+            const def = NODE_REGISTRY[type];
+            if(!def) return;
+            const btn = document.createElement('button');
+            btn.className = 'btn';
+            btn.id = `btn_${type}`; 
+            btn.innerText = `${def.label} [${def.acr}]`;
+            btn.onclick = () => addNode(type);
+            area.appendChild(btn);
+        }
+    });
+})();
+
+// --- CORE LOGIC ---
+let selectedBlockId = null;
+let selectedNode = null; 
+let idCounter = 0;
+
+document.getElementById('workspace').addEventListener('click', e => {
+    if (!e.target.closest('.node') && !e.target.closest('.tree-block')) deselectAll();
+    const rootBox = e.target.closest('.main-root');
+    if (rootBox && !e.target.closest('.node')) selectBlock(rootBox.id);
+});
+
+function deselectAll() {
+    document.querySelectorAll('.tree-block').forEach(b => b.style.borderColor = '');
+    document.querySelectorAll('.node').forEach(n => n.style.outline = '');
+    selectedBlockId = null;
+    selectedNode = null;
+    document.getElementById('inspectorFields').innerHTML = "<i>Select a node to edit.</i>";
+    updatePalette("ANY"); 
+}
+
+function getEffectiveContext(blockId) {
+    let el = document.getElementById(blockId);
+    if (!el) return "ANY";
+    const parentNode = el.parentNode; 
+    if (!parentNode || !parentNode.classList.contains('node')) return "ANY";
+    
+    const type = parentNode.dataset.type;
+    // Walk up logic could go here if Sequence sets context, but keeping it simple for now
+    if (type === "Selector" || type === "Sequence") {
+        const parentBlock = parentNode.closest('.tree-block');
+        return parentBlock ? getEffectiveContext(parentBlock.id) : "ANY";
+    }
+    return "ANY";
+}
+
+function updatePalette(context) {
+    document.getElementById('contextDebug').innerText = `Context: ${context}`;
+    Object.keys(NODE_REGISTRY).forEach(type => {
+        const def = NODE_REGISTRY[type];
+        const btn = document.getElementById(`btn_${type}`);
+        if (!btn) return;
+        if (def.req && def.req !== "ANY" && def.req !== context) btn.disabled = true;
+        else btn.disabled = false;
+    });
+}
+
+function selectBlock(id) {
+    document.querySelectorAll('.tree-block').forEach(b => b.style.borderColor = '');
+    const el = document.getElementById(id);
+    if(el) {
+        el.style.borderColor = '#7aa2f7';
+        el.style.borderWidth = '2px';
+        selectedBlockId = id;
+        const ctx = getEffectiveContext(id);
+        updatePalette(ctx);
+    }
+}
+
+function addNode(type) {
+    if (!selectedBlockId) { alert("Select a column first."); return; }
+    const def = NODE_REGISTRY[type];
+    const container = document.getElementById(selectedBlockId);
+    const div = document.createElement('div');
+    div.className = 'node';
+    div.dataset.type = type;
+    div.dataset.cat = def.cat;
+    div.draggable = true;
+
+    // Set defaults from registry params
+    if(def.params) {
+        Object.keys(def.params).forEach(k => div.dataset[k] = def.params[k]);
+    }
+
+    let innerHTML = `
+        <span class="label">${def.acr}</span> 
+        <div style="margin-left:auto; display:flex; gap:5px;">
+            <span class="btn-move" onclick="moveUp(this)">▲</span>
+            <span class="btn-move" onclick="moveDown(this)">▼</span>
+            <span class="del" onclick="event.stopPropagation(); this.closest('.node').remove(); setTimeout(() => selectBlock('${selectedBlockId}'), 50);">x</span>
+        </div>
+    `;
+
+    if (def.cat === 'struct') {
+        const blockId = 'blk_' + (++idCounter);
+        innerHTML += `<div class="tree-block" id="${blockId}"></div>`;
+        setTimeout(() => { selectBlock(blockId); }, 50);
+    }
+
+    div.innerHTML = innerHTML;
+    div.addEventListener('click', e => { e.stopPropagation(); selectNode(div); });
+    container.appendChild(div);
+    
+    // Drag & Drop
+    div.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', null); window.draggedItem = div; setTimeout(()=>div.style.opacity='0.5',0); });
+    div.addEventListener('dragend', e => { div.style.opacity='1'; window.draggedItem=null; document.querySelectorAll('.active-drop').forEach(b=>b.classList.remove('active-drop')); });
+}
+
+function selectNode(div) {
+    document.querySelectorAll('.node').forEach(n => n.style.outline = '');
+    div.style.outline = '2px solid var(--accent)';
+    selectedNode = div; 
+    showInspector(div);
+    const parentBlock = div.closest('.tree-block');
+    if (parentBlock) selectBlock(parentBlock.id);
+}
+
+// --- DYNAMIC INSPECTOR ---
+function showInspector(div) {
+    const f = document.getElementById('inspectorFields');
+    f.innerHTML = '';
+    const type = div.dataset.type;
+    const def = NODE_REGISTRY[type];
+
+    f.innerHTML = `<div style="color:#fff; margin-bottom:5px; font-weight:bold;">${def.label}</div>`;
+
+    if (def.params) {
+        Object.keys(def.params).forEach(key => {
+            const val = div.dataset[key] !== undefined ? div.dataset[key] : def.params[key];
+            const row = document.createElement('div');
+            row.innerHTML = `<label>${key}: <input type="number" id="edit_${key}" value="${val}"></label>`;
+            f.appendChild(row);
+            row.querySelector('input').addEventListener('input', (e) => {
+                div.dataset[key] = e.target.value;
+            });
+        });
+    } else {
+        f.innerHTML += "<div style='color:#666'>No parameters</div>";
+    }
+}
+
+// --- DRAG DROP HELPERS ---
+document.addEventListener('dragover', e => { e.preventDefault(); const block = e.target.closest('.tree-block'); if(block) block.classList.add('active-drop'); });
+document.addEventListener('dragleave', e => { const block = e.target.closest('.tree-block'); if(block) block.classList.remove('active-drop'); });
+document.addEventListener('drop', e => { 
+    e.preventDefault(); 
+    const block = e.target.closest('.tree-block'); 
+    if(block && window.draggedItem) { 
+        if(window.draggedItem.contains(block)) return; 
+        block.classList.remove('active-drop'); 
+        block.appendChild(window.draggedItem);
+        setTimeout(()=>selectBlock(block.id),50); 
+    } 
+});
+function moveUp(btn){ event.stopPropagation(); const n=btn.closest('.node'); if(n.previousElementSibling) n.parentNode.insertBefore(n, n.previousElementSibling); }
+function moveDown(btn){ event.stopPropagation(); const n=btn.closest('.node'); if(n.nextElementSibling) n.parentNode.insertBefore(n.nextElementSibling, n); }
+
+// --- SERIALIZATION ---
+function serializeNode(el) {
+    const type = el.dataset.type;
+    const def = NODE_REGISTRY[type];
+    const data = { type: type, cat: el.dataset.cat };
+    if(def.params) Object.keys(def.params).forEach(k => data[k] = el.dataset[k]);
+    
+    if (data.cat === 'struct') {
+        const block = el.querySelector('.tree-block');
+        data.children = Array.from(block.children).filter(c => c.classList.contains('node')).map(serializeNode);
+    }
+    return data;
+}
+
+function getColumnData(id) {
+    return Array.from(document.getElementById(id).children).filter(c => c.classList.contains('node')).map(serializeNode);
+}
+
+function saveLayout() {
+    const layout = { 
+        name: document.getElementById('metaStratName').value,
+        teamName: document.getElementById('metaTeamName').value,
+        code: document.getElementById('metaCode').value,
+        colors: { main: document.getElementById('metaColor1').value, secondary: document.getElementById('metaColor2').value },
+        c: getColumnData('rootC'), lw: getColumnData('rootLW'), rw: getColumnData('rootRW'), ld: getColumnData('rootLD'), rd: getColumnData('rootRD') 
+    };
+    const blob = new Blob([JSON.stringify(layout, null, 2)], {type: "application/json"});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = (layout.code || "STRAT") + ".json";
+    a.click();
+}
+
+function loadLayout(input) {
+    const file = input.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const layout = JSON.parse(e.target.result);
+            document.getElementById('metaStratName').value = layout.name || "";
+            document.getElementById('metaTeamName').value = layout.teamName || "";
+            document.getElementById('metaCode').value = layout.code || "";
+            if(layout.colors) { document.getElementById('metaColor1').value = layout.colors.main; document.getElementById('metaColor2').value = layout.colors.secondary; }
+            
+            ['c','lw','rw','ld','rd'].forEach(role => {
+                const rootId = 'root' + role.toUpperCase();
+                document.getElementById(rootId).innerHTML = "";
+                if(layout[role]) processNodeTree(rootId, layout[role]);
+            });
+        } catch(err) { alert("Load Error: " + err); }
+    };
+    reader.readAsText(file);
+    input.value = "";
+}
+
+function processNodeTree(targetId, list) {
+    const container = document.getElementById(targetId);
+    list.forEach(data => {
+        const def = NODE_REGISTRY[data.type];
+        if(!def) return;
+        const div = document.createElement('div');
+        div.className = 'node';
+        div.dataset.type = data.type;
+        div.dataset.cat = def.cat;
+        div.draggable = true;
+        if(def.params) Object.keys(def.params).forEach(k => div.dataset[k] = data[k] || def.params[k]);
+
+        let inner = `<span class="label">${def.acr}</span> 
+        <div style="margin-left:auto; display:flex; gap:5px;">
+            <span class="btn-move" onclick="moveUp(this)">▲</span>
+            <span class="btn-move" onclick="moveDown(this)">▼</span>
+            <span class="del" onclick="event.stopPropagation(); this.closest('.node').remove();">x</span>
+        </div>`;
+
+        if (def.cat === 'struct') {
+            const bid = 'blk_' + (++idCounter);
+            inner += `<div class="tree-block" id="${bid}"></div>`;
+        }
+        div.innerHTML = inner;
+        div.addEventListener('click', e => { e.stopPropagation(); selectNode(div); });
+        container.appendChild(div);
+
+        if(def.cat === 'struct' && data.children) {
+            processNodeTree(div.querySelector('.tree-block').id, data.children);
+        }
+    });
+}
+
+// --- CODE GENERATION (DELEGATED TO REGISTRY) ---
+function buildCode(el, indent) {
+    if (!el) return '';
+    const pad = '    '.repeat(indent);
+    const type = el.dataset.type;
+    const def = NODE_REGISTRY[type];
+    const data = { ...el.dataset }; 
+
+    if (def.cat === 'struct') {
+        const block = el.querySelector('.tree-block');
+        const childCode = Array.from(block.children)
+            .filter(c => c.classList.contains('node'))
+            .map(child => buildCode(child, indent + 1))
+            .join(',\n');
+        return `${pad}${def.generate(childCode)}`;
+    } else {
+        return `${pad}${def.generate(data)}`;
+    }
+}
+
+function exportBT() {
+    const getRoot = id => { const r = document.getElementById(id).firstElementChild; return r ? buildCode(r,2) : 'null'; };
+    const sName = document.getElementById('metaStratName').value.replace(/[^a-zA-Z0-9 ]/g,"");
+    const tCode = document.getElementById('metaCode').value.replace(/[^a-zA-Z0-9]/g,"").toUpperCase();
+    const final = `// ${sName} (${tCode})\n(function(){\nconst STRATEGY_ID="BT_${tCode}_"+Math.floor(Math.random()*999);\nclass Node{constructor(){}tick(bb){return false;}}\nclass ConditionNode extends Node{constructor(fn){super();this.fn=fn;}tick(bb){return this.fn(bb)?"SUCCESS":"FAILURE";}}\nclass ActionNode extends Node{constructor(fn){super();this.fn=fn;}tick(bb){return this.fn(bb);}}\nclass SequenceNode extends Node{constructor(c){super();this.children=c;}tick(bb){for(let n of this.children){let r=n.tick(bb);if(r!=="SUCCESS")return r;}return"SUCCESS";}}\nclass SelectorNode extends Node{constructor(c){super();this.children=c;}tick(bb){for(let n of this.children){let r=n.tick(bb);if(r!=="FAILURE")return r;}return"FAILURE";}}\n\nfunction makeBB(p){/*Use Helper*/ return window.makeBB?window.makeBB(p):{p};}\n\nconst TREE_C = \n${getRoot('rootC')};\nconst TREE_LW = \n${getRoot('rootLW')};\nconst TREE_RW = \n${getRoot('rootRW')};\nconst TREE_LD = \n${getRoot('rootLD')};\nconst TREE_RD = \n${getRoot('rootRD')};\n\nfunction think(p){\n const bb=makeBB(p);\n let r=null;\n if(p.role==="C")r=TREE_C?TREE_C.tick(bb):null;\n else if(p.role==="LW")r=TREE_LW?TREE_LW.tick(bb):null;\n else if(p.role==="RW")r=TREE_RW?TREE_RW.tick(bb):null;\n else if(p.role==="LD")r=TREE_LD?TREE_LD.tick(bb):null;\n else if(p.role==="RD")r=TREE_RD?TREE_RD.tick(bb):null;\n else r=TREE_C?TREE_C.tick(bb):null;\n if(!r||typeof r==='string'||isNaN(r.tx)) return {tx:p.x||500,ty:p.y||300,action:"none"};\n return r;\n}\nif(typeof registerStrategy==="function") registerStrategy(STRATEGY_ID,"${sName}","${document.getElementById('metaTeamName').value}","${tCode}",think,{main:"${document.getElementById('metaColor1').value}",secondary:"${document.getElementById('metaColor2').value}"});\n})();`;
+    document.getElementById("output").value = final;
+}
+</script>
+</body>
+</html>
