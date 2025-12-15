@@ -53,6 +53,7 @@
 <script src="teams/bt13.js"></script>
 
 <script src="library.js"></script>
+<script src="node_registry.js"></script>
 <script src="strategy_interpreter.js"></script>
 <script src="ai_coach.js"></script>
 
@@ -502,11 +503,17 @@ function handleTrainingInput(e) {
             if (train_rounds > 27) train_rounds = 27;
         }
         
-        // Episodes (Index 5)
+        // Episodes (Index 5) - UPDATED FOR INFINITE MODE
         if (trainingIndex === 5) {
-            train_episodes += (dir * 10); 
-            if (train_episodes < 10) train_episodes = 10;
-            if (train_episodes > 2000) train_episodes = 2000;
+            if (train_episodes === -1 && dir === 1) {
+                train_episodes = 10; // Right from Infinite -> 10
+            } else if (train_episodes === 10 && dir === -1) {
+                train_episodes = -1; // Left from 10 -> Infinite
+            } else if (train_episodes !== -1) {
+                train_episodes += (dir * 10); 
+                if (train_episodes < 10) train_episodes = 10; // Clamp low
+                if (train_episodes > 5000) train_episodes = 5000; // Clamp high
+            }
         }
 
         // NEW: Baseline (Index 6)
@@ -611,7 +618,8 @@ function drawTrainingMenu() {
     drawRow(4, "Tourney Rounds:", train_rounds);
 
     // 5. Episodes
-    drawRow(5, "Total Episodes:", train_episodes);
+    const epText = (train_episodes === -1) ? "INFINITE ♾️" : train_episodes;
+    drawRow(5, "Total Episodes:", epText);
 
     // 6. NEW: Baseline Setting
     const blText = (train_baseline === -1) ? "Auto (Ep 1)" : train_baseline + " Pts";
@@ -871,6 +879,19 @@ document.addEventListener("keydown", (e) => {
         handleTrainingInput(e);
         return;
     }
+
+
+    // 4. Active Tournament / Warp Speed
+    if (gameState === "tournament") {
+        // Press Q to Gracefully Stop
+        if (e.key === 'q' || e.key === 'Q') {
+            if (typeof AICoach !== 'undefined' && AICoach.active) {
+                AICoach.stopTraining();
+            }
+        }
+        return;
+    }
+
 
 });
 
@@ -1156,9 +1177,12 @@ function applyPendingRosterChanges() {
     }
     
     // 3. Re-assign roles immediately after changes
-    assignRolesForTeam(0);
-    assignRolesForTeam(1);
+    //assignRolesForTeam(0);
+    //assignRolesForTeam(1);
 }
+
+
+
 
 function addSkater(teamId) {
     const currentSkaters = players.filter(p => p.team === teamId && p.type === "skater");
@@ -2125,7 +2149,7 @@ const puck = {
                 // --- A. ENVIRONMENT COLLISIONS ---
                 
                 // 1. Rink Walls (Bounciness 0.98)
-                let hit = collideCircleWithRink(this, radius, 0.98);
+                let hit = collideCircleWithRink(this, radius, 0.78);
 
                 // 2. Goal Posts/Netting (If helper exists)
                 if (typeof resolveGoalCollisions === "function") {
@@ -2248,7 +2272,7 @@ const puck = {
         // =====================================================
         
         // Terminal Velocity (Prevents wall clipping)
-        const MAX_PUCK_SPEED = 14.0; 
+        const MAX_PUCK_SPEED = 12.0; 
         const currentSpeed = Math.hypot(this.vx, this.vy);
         
         if (currentSpeed > MAX_PUCK_SPEED) {
@@ -2258,8 +2282,8 @@ const puck = {
         }
 
         // Ice Friction
-        this.vx *= 0.993; 
-        this.vy *= 0.993;
+        this.vx *= 0.991; 
+        this.vy *= 0.991;
     },
 
     // =====================================================
@@ -2342,87 +2366,84 @@ function tryPickupPuck(p) {
 
     const dx = puck.x - p.x;
     const dy = puck.y - p.y;
-    const interactDist = p.size/2 + puck.r + 5;
+    
+    // 1. MAGNETISM: Give them a slightly larger reach for loose pucks
+    // Old: p.size/2 + puck.r + 5 (~12px)
+    // New: p.size/2 + puck.r + 8 (~15px) -> Easier to grab
+    const interactDist = p.size/2 + puck.r + 8;
 
-    // HITBOX CHECK
     if (dx*dx + dy*dy <= interactDist*interactDist) {
         
+        // --- 2. THE FIX: SPEED CHECK ---
+        // If the puck is moving slowly (under 2.0 speed), it is FREE.
+        // No dice rolls. No bobbles. Just take it.
+        const puckSpeed = Math.hypot(puck.vx, puck.vy);
+        
+        if (puckSpeed < 2.0) {
+            puck.ownerId = p.id;
+            puck.vx = 0; puck.vy = 0;
+            puck.isShot = false; // Reset shot flag
+            puck.lastOwnerId = p.id; // Claim ownership
+            if (puck.passTargetId) puck.passTargetId = null;
+            return;
+        }
+
         // ================================================================
         // SCENARIO A: IT IS A SHOT (Dangerous Projectile)
         // ================================================================
-        // RULE: No one catches a shot. It deflects or blocks.
         if (puck.isShot) {
-            
-            // 1. HIT CHANCE
-            // Hitting a player is common (60-80%), but not guaranteed.
-            // If missed, it sails through the "legs".
-            const hitChance = (p.team === getPlayerById(puck.lastOwnerId)?.team) ? 0.60 : 0.80;
+            // (Keep your existing shot deflection logic here)
+            // ...
+             const hitChance = (p.team === getPlayerById(puck.lastOwnerId)?.team) ? 0.60 : 0.80;
             if (Math.random() > hitChance) return; 
 
-            // 2. DEFLECTION PHYSICS (The "Tip")
-            // Normalize impact
+            // Deflection Physics
             const dist = Math.sqrt(dx*dx + dy*dy);
             const nx = dx / dist; 
             const ny = dy / dist; 
-            
-            // Deflect Angle: Random "Tip" (not a perfect wall reflection)
             const tipAngle = (Math.random() - 0.5) * 1.5; 
             const cos = Math.cos(tipAngle);
             const sin = Math.sin(tipAngle);
-            
-            // Rotate velocity
             const nvx = puck.vx * cos - puck.vy * sin;
             const nvy = puck.vx * sin + puck.vy * cos;
             
             puck.vx = nvx;
             puck.vy = nvy;
 
-            // 3. ENERGY LOSS (No Rail Gun)
-            // Hitting a body absorbs energy.
-            // Teammate Tip: Retains 75% speed.
-            // Enemy Block: Retains 40% speed.
+            // Dampening
             const isTeammate = (p.team === getPlayerById(puck.lastOwnerId)?.team);
             const dampening = isTeammate ? 0.75 : 0.40;
-            
             puck.vx *= dampening;
             puck.vy *= dampening;
 
-            // 4. CLEANUP
-            // Push puck out of body so it doesn't get stuck
             puck.x = p.x + nx * (interactDist + 2);
             puck.y = p.y + ny * (interactDist + 2);
-            
-            // It is now a loose puck (rebound), anyone can pick it up NEXT frame.
             puck.isShot = false; 
             return; 
         }
 
         // ================================================================
-        // SCENARIO B: IT IS A PASS / LOOSE PUCK (Catchable)
+        // SCENARIO B: FAST PASS / BOUNCING PUCK
         // ================================================================
-        
-        // Identify Relationship
         let isTeammate = false;
         if (puck.lastOwnerId) {
             const prevOwner = getPlayerById(puck.lastOwnerId);
             if (prevOwner && prevOwner.team === p.team) isTeammate = true;
         }
 
-        // 1. TEAMMATE RECEPTION
+        // Teammate Pass (95% catch rate)
         if (isTeammate) {
             if (Math.random() < 0.95) {
-                // Stats
                 if (puck.passTargetId === p.id && window.BT8_STATS) window.BT8_STATS.completions++;
                 puck.passTargetId = null; 
-
                 puck.ownerId = p.id;
                 puck.vx = 0; puck.vy = 0;
                 return;
             } 
         }
-
-        // 2. OPPONENT STEAL
-        if (!isTeammate) {
+        // Enemy Pass / Loose Neutral Puck (40% steal rate)
+        // Only applies if puck is moving FAST (> 2.0)
+        else {
             if (Math.random() < 0.40) {
                 if (puck.passTargetId !== null) puck.passTargetId = null;
                 puck.ownerId = p.id;
@@ -2547,10 +2568,10 @@ function passPuckToTeammate(p, target) {
     const dist = Math.hypot(dxRaw, dyRaw);
 
     // VARIABLE SPEED LOGIC
-    let passSpeed = 5.5 + (dist / 40.0);
-    passSpeed += (Math.random() * 1.0 - 0.5); 
-    if (passSpeed < 6.0) passSpeed = 6.0;
-    if (passSpeed > 14.0) passSpeed = 14.0;
+    let passSpeed = 3.5 + (dist / 100.0);
+    passSpeed += (Math.random() * .8 - 0.4); 
+    if (passSpeed < 3.0) passSpeed = 3.0;
+    if (passSpeed > 5.5) passSpeed = 5.5;
 
     // Calculate Lead
     const travelTime = dist / passSpeed;
@@ -2666,7 +2687,7 @@ function tryStealPuck(attacker, owner) {
 
 
 // =========================================================
-// PLAYER vs PLAYER COLLISIONS
+// PLAYER vs PLAYER COLLISIONS (TUNED & MOMENTUM BASED)
 // =========================================================
 function resolvePlayerCollisions() {
     for (let i = 0; i < players.length; i++) {
@@ -2685,6 +2706,7 @@ function resolvePlayerCollisions() {
             if (dist2 < minDist * minDist && dist2 > 0) {
                 const dist = Math.sqrt(dist2);
                 
+                // Normal Vector
                 const nx = dx / dist;
                 const ny = dy / dist;
 
@@ -2700,7 +2722,7 @@ function resolvePlayerCollisions() {
                 const rvy = b.vy - a.vy;
                 const velAlongNormal = rvx * nx + rvy * ny;
 
-                if (velAlongNormal > 0) continue;
+                if (velAlongNormal > 0) continue; // Moving apart
 
                 const restitution = 0.9; 
                 let jImpulse = -(1 + restitution) * velAlongNormal;
@@ -2714,63 +2736,77 @@ function resolvePlayerCollisions() {
                 b.vx += impulseX;
                 b.vy += impulseY;
 
-                // --- 3. IMPACT EVENT ---
+                // --- 3. IMPACT & STUN LOGIC ---
                 const impactForce = Math.abs(jImpulse);
                 
-                // Threshold: 0.75 (Medium hit or harder)
-                if (impactForce > 0.75) {
+                // *** TUNING FIX: Raised Threshold from 0.75 to 1.50 ***
+                // Now requires a deliberate collision, not just a faceoff bump.
+                if (impactForce > 1.50) {
                     
-                    // --- A. CALCULATE STUN DURATION ---
-                    // Map force (0.75 to 2.0) -> frames (20 to 90)
-                    let stunFrames = 20 + (impactForce - 0.75) * 60;
+                    // A. CALCULATE DYNAMIC STUN
+                    // Formula: (Force * 12). 
+                    // Force 1.5 (Min) -> 18 frames (0.3s) - Just a stumble
+                    // Force 3.0 (Avg) -> 36 frames (0.6s)
+                    // Force 6.0 (Big) -> 72 frames (1.2s)
+                    let stunFrames = impactForce * 12;
+                    
+                    // Clamp limits (Min 15, Max 90)
+                    if (stunFrames < 15) stunFrames = 15;
                     if (stunFrames > 90) stunFrames = 90;
                     stunFrames = Math.floor(stunFrames);
 
-                    // --- B. CHECK PUCK LOSS ---
-                    
-                    // Case 1: Player A has the puck
-                    if (puck.ownerId === a.id) {
-                        // 1. Eject: Teleport puck from A's center to stick tip
-                        // (This also sets puck.ownerId = null)
-                        ejectPuckFromOwner(a); 
-                        
-                        // 2. Pop Force: Harder hit = further flight
-                        const popScale = 2.0 + impactForce * 2.0; 
-                        
-                        puck.vx = a.vx + (Math.random() - 0.5) * popScale;
-                        puck.vy = a.vy + (Math.random() - 0.5) * popScale;
-                        
-                        // 3. Status Effects
-                        puckStealCooldown = 15; 
-                        a.stunTimer = stunFrames; 
+                    // B. DETERMINE "THE HAMMER" (Who wins the hit?)
+                    // A moves towards B (positive normal).
+                    // B moves towards A (negative normal).
+                    const vA = a.vx * nx + a.vy * ny;
+                    const vB = b.vx * (-nx) + b.vy * (-ny);
 
-                        // *** NEW: Randomize Spin (CW or CCW) ***
-                        a.stunRot = (Math.random() < 0.5 ? 0.2 : -0.2);
+                    let victim = null;
+
+                    // Compare velocity into the hit
+                    // We use a 0.5 buffer so similar speeds result in a draw
+                    if (vA > vB + 0.5) {
+                        victim = b; // A runs over B
+                    } else if (vB > vA + 0.5) {
+                        victim = a; // B runs over A
+                    } else {
+                        victim = "BOTH"; // Head-on collision
                     }
-                    
-                    // Case 2: Player B has the puck
-                    else if (puck.ownerId === b.id) {
-                        // 1. Eject
-                        ejectPuckFromOwner(b); 
 
-                        // 2. Pop Force
-                        const popScale = 2.0 + impactForce * 2.0;
-
-                        puck.vx = b.vx + (Math.random() - 0.5) * popScale;
-                        puck.vy = b.vy + (Math.random() - 0.5) * popScale;
-
-                        // 3. Status Effects
-                        puckStealCooldown = 15;
-                        b.stunTimer = stunFrames;
-
-                        // *** NEW: Randomize Spin (CW or CCW) ***
-                        b.stunRot = (Math.random() < 0.5 ? 0.2 : -0.2);
+                    // C. APPLY CONSEQUENCES
+                    if (victim === "BOTH") {
+                        applyStun(a, stunFrames, impactForce);
+                        applyStun(b, stunFrames, impactForce);
+                    } else if (victim) {
+                        applyStun(victim, stunFrames, impactForce);
                     }
                 }
             }
         }
     }
 }
+
+// Helper to apply stun and puck loss cleanly
+function applyStun(p, frames, force) {
+    p.stunTimer = frames;
+    p.stunRot = (Math.random() < 0.5 ? 0.2 : -0.2);
+
+    // If they have the puck, they lose it
+    if (puck.ownerId === p.id) {
+        ejectPuckFromOwner(p);
+        
+        // Pop the puck loose based on hit severity
+        const popScale = 2.0 + force * 1.5;
+        puck.vx = p.vx + (Math.random() - 0.5) * popScale;
+        puck.vy = p.vy + (Math.random() - 0.5) * popScale;
+        
+        puckStealCooldown = 15;
+    }
+}
+
+
+
+
 
 // =========================================================
 // AI INPUT BUILDER (Phase 3)
@@ -3835,11 +3871,23 @@ function updateAISkater(p) {
         d = { tx: p.x, ty: p.y, action: "none" };
     }
 
-    // This catches ANY strategy returning null, undefined, or "FAILURE"
-    if (!d || typeof d.tx === 'undefined') {
+
+
+
+
+
+
+    // This catches ANY strategy returning null, undefined, "FAILURE", or NaN
+    if (!d || typeof d.tx !== 'number' || isNaN(d.tx) || isNaN(d.ty)) {
+        // console.warn("Bad AI Output detected for player", p.id); // Optional debug log
         d = { tx: p.x, ty: p.y, action: "none" };
     }
-    // *******************************
+
+
+
+
+
+
 
     // =========================================================
     // *** BRAIN STEM OVERRIDE: ANTI-CAMPING & DELAYED OFFSIDE ***
@@ -3930,9 +3978,9 @@ function updateAISkater(p) {
     p.vy *= speedDecay;
 
     // --- THROTTLE CONTROL ---
-    let drive = 0.08; 
-    if (p.role === "C" || p.role === "S" || p.role === "Attacker") drive = 0.10; 
-    if (distToTarget < 4) drive = 0; 
+    let drive = 0.055; 
+    if (p.role === "C" || p.role === "S" || p.role === "Attacker") drive = 0.06; 
+    if (distToTarget < 12) drive = .01; 
 
     // =========================================================
     // *** THE FIX: SMART APPROACH BRAKING ***
@@ -4061,9 +4109,10 @@ function updateGoalie(p) {
             const target = findGoaliePassTarget(p);
 
             if (target) {
+                // Face the target (Visuals)
                 p.angle = Math.atan2(target.y - p.y, target.x - p.x);
-                shootPuck(p, 5.5); 
-            } 
+                passPuckToTeammate(p, target);
+            }
             else {
                 // C. SMART CLEAR (SCAN ANGLES)
                 // Don't just shoot blindly. Find the open lane.
@@ -4401,11 +4450,12 @@ function formatTime(seconds) {
 function updateClock(now) {
     const elapsed = (now - lastGameTimeUpdate) / 1000;
 
-    // Paused states: goals, faceoff pause, menus, intermission
+    // Paused states: goals, faceoff pause, menus, intermission... and REPLAYS
     const isPaused =
         (goalResetTimer !== null && now < goalResetTimer) ||
         now < faceoffPauseUntil ||
-        gameState !== "playing";
+        gameState !== "playing" ||
+        (typeof isReplaying !== 'undefined' && isReplaying);
 
     // Normal countdown
     if (!isPaused && timeRemaining > 0) {
@@ -4579,7 +4629,7 @@ function renderReplay(ctx) {
     ctx.font = "bold 20px monospace";
     ctx.fillText("REPLAY", W / 2 - 40, 40);
     
-    replayIndex += 0.3444; 
+    replayIndex += 0.4444; 
 
     if (replayIndex >= replayBuffer.length) {
         isReplaying = false;
@@ -5500,7 +5550,7 @@ function drawDebugRoles(ctx) {
     ctx.font = "bold 10px Arial"; 
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillStyle = "rgba(100, 100, 100, 0.5)"; 
+    ctx.fillStyle = "rgba(180, 180, 180, 0.9)"; 
 
     for (let p of players) {
         // DEBUG: Uncomment this once to see what your goalie is actually called in the console
@@ -5745,7 +5795,7 @@ function renderFrame() {
 
     
     //drawBT8Debug();
-    //drawDebugRoles(ctx);
+    drawDebugRoles(ctx);
     //drawDebugBackdoorTargets(ctx);
     
     drawPeriodOverlay();

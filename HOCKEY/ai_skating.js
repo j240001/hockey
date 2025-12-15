@@ -24,7 +24,7 @@ function applyAISkatingPhysics(p) {
     let dynamicLimit = p.maxSpeed;
     
     if (angleDiff > 1.0) {
-        dynamicLimit = p.maxSpeed * 0.70; 
+        dynamicLimit = p.maxSpeed * 0.80; 
     }
 
     // 4. The Taper (Decay)
@@ -33,7 +33,7 @@ function applyAISkatingPhysics(p) {
         // DECAY_RATE: How fast we lose speed when facing the wrong way.
         // 0.02 = Glides for a long time (Icy)
         // 0.05 = Slows down noticeably
-        const DECAY_RATE = 0.08; 
+        const DECAY_RATE = 0.04; 
 
         // Smoothly interpolate (Lerp) down to the limit
         const newSpeed = currentSpeed + (dynamicLimit - currentSpeed) * DECAY_RATE;
