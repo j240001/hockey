@@ -69,11 +69,21 @@ const Tournament = {
             }
         }
 
-        const realTeamCount = keys.length;
-        const totalMatchesNeeded = Math.ceil((realTeamCount * TARGET_GAMES) / 2);
-        if (this.matches.length > totalMatchesNeeded) {
-            this.matches = this.matches.slice(0, totalMatchesNeeded);
+        const TARGET_GP = 82;
+        const balancedMatches = [];
+        const teamCounts = {};
+        keys.forEach(k => teamCounts[k] = 0);
+
+        // Filter the generated schedule (which has excess games)
+        // Only schedule a game if BOTH teams need it to reach 82
+        for (const m of this.matches) {
+            if (teamCounts[m.home] < TARGET_GP && teamCounts[m.away] < TARGET_GP) {
+                balancedMatches.push(m);
+                teamCounts[m.home]++;
+                teamCounts[m.away]++;
+            }
         }
+        this.matches = balancedMatches;
 
         console.log(`🏆 SEASON READY: ${this.matches.length} matches.`);
         this.startNextMatch(); 
@@ -397,7 +407,7 @@ const Tournament = {
 
 
 
-// 6. RECORD RESULT
+    // 6. RECORD RESULT
     recordResult: function(isShootout) {
         if (this.currentMatchIndex >= this.matches.length) return;
 
@@ -471,6 +481,27 @@ const Tournament = {
             else { hStats.L++; }
         }
 
+        // =================================================================
+        // 🛑 FAIL FAST SYSTEM (INSERTED HERE)
+        // =================================================================
+        if (this.isTrainingEpisode) {
+            const trainee = this.standings["TRAINEE"];
+            
+            // CHECK AT GAME 6
+            if (trainee && trainee.GP === 6) {
+                const avgShots = trainee.totalSOGF / 6.0;
+                
+                // If they can't even hit 2.0 shots by Game 6, kill them.
+                if (avgShots < 2.0) {
+                    console.log(`⚠️ FAIL FAST: Aborting at Game 6 (SF: ${avgShots.toFixed(1)})`);
+                    
+                    // Skip remaining matches by maximizing the index
+                    this.currentMatchIndex = this.matches.length; 
+                }
+            }
+        }
+        // =================================================================
+
         this.currentMatchIndex++;
 
         if (this.active && !this.isWarping) {
@@ -478,7 +509,6 @@ const Tournament = {
             setTimeout(() => this.startNextMatch(), delay);
         }
     },
-
 
 
 

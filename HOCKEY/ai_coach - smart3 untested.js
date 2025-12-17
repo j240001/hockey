@@ -1,5 +1,5 @@
 // =============================================================================
-// 1. STRATEGY LIBRARY (The Optimizer's Toolkit)
+// 1. STRATEGY LIBRARY (Tagged for Smart Drafting)
 // =============================================================================
 const LIBRARY = {
     // --- OFFENSE: SHOOTING ---
@@ -96,7 +96,7 @@ const LIBRARY = {
 
 
 // =============================================================================
-// 2. THE SCOUT (Ironclad Dashboard Edition)
+// 2. THE SCOUT (Dashboard Edition)
 // =============================================================================
 const AICoach = {
     active: false,
@@ -132,12 +132,9 @@ const AICoach = {
 
     // 1. INITIALIZE 
     initTournamentTraining: function(json, opponents, rounds, episodes, manualBaseline = 55) {
-        console.log(`🕵️ SCOUT: Ironclad Dashboard Initialized.`);
-        console.log(`- Optimization Rules:`);
-        console.log(`  1. Activity (SF>=8, SA>=8)`);
-        console.log(`  2. Shot Dominance (SF > SA)`);
-        console.log(`  3. Score Dominance (GF > GA)`);
-        console.log(`  4. Points must increase.`);
+        console.log(`🕵️ SCOUT: Dashboard Initialized.`);
+        console.log(`- Hunting: Silent until prospect found.`);
+        console.log(`- Refining: Tracks Baseline vs Best.`);
         
         this.opponents = opponents;
         this.roundsPerEpisode = rounds;
@@ -231,52 +228,47 @@ const AICoach = {
         const avgSA = SA / GP;
         
         // --- 1. SILENT FAIL FAST ---
+        // If tournament.js aborted early (e.g. 6 games, 0 shots), GP will be low.
+        // Or if shots are effectively zero.
         if (avgSF < 2.0 || GP < (this.roundsPerEpisode * this.opponents.length * 0.5)) {
-            this.handleRejection(stats, "ABORTED", false);
+            // Silent kill. Don't log stats.
+            this.handleRejection(stats, "ABORTED", false); // false = no console log
             this.nextStep();
             return;
         }
 
         // --- 2. LOGGING ---
+        // Only log details if we passed the dummy check
         if (this.mode === "POLISHING") {
-             console.log(`   > RESULT: ${Pts} Pts | SF:${avgSF.toFixed(1)} SA:${avgSA.toFixed(1)} | GD:${GD}`);
+             console.log(`   > RESULT: ${Pts} Pts | SF: ${avgSF.toFixed(1)}`);
         }
 
-        // --- 3. FILTER LOGIC (THE IRONCLAD RULES) ---
-        // Rule A: High Event (Both > 8.0)
-        // Rule B: Positive Shot Differential (SF > SA)
-        // Rule C: Positive Goal Differential (GF > GA)
+        // --- 3. FILTER LOGIC ---
+        // STRICT: SF >= 8 and SA >= 8
+        const isHighEvent = (avgSF >= 8.0 && avgSA >= 8.0);
         
-        const ruleHighEvent = (avgSF >= 8.0 && avgSA >= 8.0);
-        const ruleShotDom   = (avgSF > avgSA);
-        const ruleGoalDom   = (GD > 0); // GF > GA implies GF - GA > 0
-        
-        const isFunctional = (ruleHighEvent && ruleShotDom && ruleGoalDom);
-        
-        if (!isFunctional) {
-            // Determine Reason
-            let reason = "Dysfunctional";
-            if (!ruleHighEvent) reason = "Low Activity (SF<8 or SA<8)";
-            else if (!ruleShotDom) reason = "Outshot (SA > SF)";
-            else if (!ruleGoalDom) reason = "Losing Record (GA > GF)";
-
+        if (!isHighEvent) {
+            // If Hunting: Silent reject
+            // If Polishing: Log failure
             const verbose = (this.mode === "POLISHING");
-            if (verbose) console.log(`   > FAIL: ${reason}`);
-            this.handleRejection(stats, reason, verbose);
+            if (verbose) console.log(`   > FAIL: Low Activity (SF ${avgSF.toFixed(1)})`);
+            this.handleRejection(stats, "DYSFUNCTIONAL", verbose);
         } 
         else {
-            // HIGH EVENT & DOMINANT TEAM
+            // HIGH EVENT TEAM
             if (this.mode === "HUNTING") {
                 // *** PROSPECT FOUND ***
+                // Capture the "Origin Story" stats
                 this.foundingStats = { Pts: Pts, GP: GP, SF: avgSF };
+                
                 console.log(`✨ PROSPECT FOUND! (Pts:${Pts} SF:${avgSF.toFixed(1)}) -> SWITCHING TO REFINING`);
+                
                 this.switchToPolishing(Pts, GD, GP);
             } 
             else {
                 // *** REFINING STEP ***
                 this.polishingCounter--;
                 
-                // CHECK IMPROVEMENT (Points must improve, or Tie + Better GD)
                 if (Pts > this.localBestPoints || (Pts === this.localBestPoints && GD > this.localBestGoalDiff)) {
                     console.log(`🚀 IMPROVED! New Best: ${Pts} Pts`);
                     this.localBestPoints = Pts;
@@ -464,7 +456,7 @@ const AICoach = {
         const sorted = [...this.mutationHistory].reverse();
         let html = `<!DOCTYPE html><html><body style="background:#222;color:#eee"><h1>Scouting Report</h1><table border="1"><tr><th>Ep</th><th>Mode</th><th>Result</th><th>Pts</th><th>S/G</th></tr>`;
         sorted.forEach(r => {
-             if (r.outcome === "DYSFUNCTIONAL" || r.outcome === "ABORTED" || r.outcome.includes("FAIL")) return;
+             if (r.outcome === "DYSFUNCTIONAL" || r.outcome === "ABORTED") return;
              const spg = (r.stats.SF / (r.stats.GP || 1)).toFixed(1);
              html += `<tr><td>${r.episode}</td><td>${r.mode}</td><td>${r.outcome}</td><td>${r.stats.Pts}</td><td>${spg}</td></tr>`;
         });

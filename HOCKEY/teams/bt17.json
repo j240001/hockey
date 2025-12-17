@@ -1,0 +1,371 @@
+{
+  "name": "CHAMPION_52PTS_Ep366",
+  "teamName": "PROSPECT",
+  "code": "PRO",
+  "colors": {
+    "main": "#466899",
+    "secondary": "#ffffff"
+  },
+  "c": [
+    {
+      "type": "Selector",
+      "cat": "struct",
+      "children": [
+        {
+          "tags": [
+            "action",
+            "offense"
+          ],
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "condInShotRange",
+              "cat": "cond"
+            },
+            {
+              "type": "actShoot",
+              "cat": "act"
+            }
+          ]
+        },
+        {
+          "tags": [
+            "move",
+            "defense",
+            "aggro"
+          ],
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condOppHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "actAggressiveGap",
+              "cat": "act"
+            }
+          ]
+        },
+        {
+          "tags": [
+            "action",
+            "move"
+          ],
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "actExecuteCarry",
+              "cat": "act"
+            }
+          ]
+        },
+        {
+          "tags": [
+            "move",
+            "defense",
+            "aggro"
+          ],
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condLoosePuck",
+              "cat": "cond"
+            },
+            {
+              "type": "actSmartIntercept",
+              "cat": "act"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "rw": [
+    {
+      "type": "Selector",
+      "cat": "struct",
+      "children": [
+        {
+          "tags": [
+            "move",
+            "defense",
+            "aggro"
+          ],
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condLoosePuck",
+              "cat": "cond"
+            },
+            {
+              "type": "actSmartIntercept",
+              "cat": "act"
+            }
+          ]
+        },
+        {
+          "tags": [
+            "action",
+            "offense",
+            "pass"
+          ],
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "condPuckInOffZone",
+              "cat": "cond"
+            },
+            {
+              "type": "condWeightedPassCheck",
+              "cat": "cond",
+              "bias": 20,
+              "fear": 30,
+              "vision": 90
+            },
+            {
+              "type": "actSmartPass",
+              "cat": "act"
+            }
+          ]
+        },
+        {
+          "tags": [
+            "action",
+            "offense"
+          ],
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "condInShotRange",
+              "cat": "cond"
+            },
+            {
+              "type": "actShoot",
+              "cat": "act"
+            }
+          ]
+        },
+        {
+          "tags": [
+            "action",
+            "move",
+            "offense"
+          ],
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "actFormationTarget",
+              "cat": "act",
+              "offsetx": 250,
+              "offsety": 100
+            }
+          ]
+        },
+        {
+          "tags": [
+            "action",
+            "offense"
+          ],
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "condPuckInOffZone",
+              "cat": "cond"
+            },
+            {
+              "type": "actShoot",
+              "cat": "act"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "ld": [
+    {
+      "type": "Selector",
+      "cat": "struct",
+      "children": [
+        {
+          "tags": [
+            "action",
+            "offense"
+          ],
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "condInShotRange",
+              "cat": "cond"
+            },
+            {
+              "type": "actShoot",
+              "cat": "act"
+            }
+          ]
+        },
+        {
+          "tags": [
+            "move",
+            "defense",
+            "aggro"
+          ],
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condLoosePuck",
+              "cat": "cond"
+            },
+            {
+              "type": "actSmartIntercept",
+              "cat": "act"
+            }
+          ]
+        },
+        {
+          "tags": [
+            "action",
+            "move"
+          ],
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "actExecuteCarry",
+              "cat": "act"
+            }
+          ]
+        },
+        {
+          "tags": [
+            "move",
+            "defense",
+            "aggro"
+          ],
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condOppHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "actAggressiveGap",
+              "cat": "act"
+            }
+          ]
+        },
+        {
+          "tags": [
+            "action",
+            "pass"
+          ],
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "condWeightedPassCheck",
+              "cat": "cond",
+              "bias": 80,
+              "fear": 80,
+              "vision": 40
+            },
+            {
+              "type": "actSmartPass",
+              "cat": "act"
+            }
+          ]
+        },
+        {
+          "tags": [
+            "action",
+            "move"
+          ],
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "actExecuteCarry",
+              "cat": "act"
+            }
+          ]
+        },
+        {
+          "tags": [
+            "move",
+            "offense",
+            "support"
+          ],
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condTeamHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "condPuckInOffZone",
+              "cat": "cond"
+            },
+            {
+              "type": "actFormationTarget",
+              "cat": "act",
+              "offsetx": 100,
+              "offsety": 0
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
