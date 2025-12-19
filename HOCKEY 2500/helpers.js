@@ -113,6 +113,50 @@ function getPuckCarrier() {
 // --- 3. TACTICAL HELPERS (Calculations) ---
 
 
+function getPositionWithinLimits(p, bb, d) {
+    // Standard rink vertical boundaries used in your other nodes
+    const rinkTop = RY - 170; 
+    const rinkBot = RY + 170;
+    
+    const distToOwn = Math.abs(p.x - bb.myGoalX);
+    const distToOpp = Math.abs(p.x - bb.enemyGoal);
+    const distToTop = Math.abs(p.y - rinkTop);
+    const distToBot = Math.abs(p.y - rinkBot);
+
+    let moveX = p.x;
+    let moveY = p.y;
+    let needsMove = false;
+
+    // 1. Depth Check (X)
+    if (distToOwn < d.minDistOwnGoal) {
+        moveX = bb.myGoalX + (bb.forwardDir * d.minDistOwnGoal);
+        needsMove = true;
+    } else if (distToOpp < d.minDistOppGoal) {
+        moveX = bb.enemyGoal - (bb.forwardDir * d.minDistOppGoal);
+        needsMove = true;
+    }
+
+    // 2. Lateral Check (Y)
+    if (distToTop < d.minDistLeftBoard) {
+        moveY = rinkTop + d.minDistLeftBoard;
+        needsMove = true;
+    } else if (distToBot < d.minDistRightBoard) {
+        moveY = rinkBot - d.minDistRightBoard;
+        needsMove = true;
+    }
+
+    // 3. Satisfaction Trigger
+    if (!needsMove) {
+        // Kill momentum so they stand still and look at puck
+        p.vx *= 0.1;
+        p.vy *= 0.1;
+        return { tx: p.x, ty: p.y, action: "none" };
+    }
+
+    return { tx: moveX, ty: moveY, action: "none" };
+}
+
+
 
 
 

@@ -237,13 +237,19 @@ const NODE_REGISTRY = {
         generate: () => `new ActionNode(bb => { try { return (typeof hoverDynamicLine === 'function' ? hoverDynamicLine(bb) : {tx:bb.p.x,ty:bb.p.y,action:'none'}); } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:'none'};} })`,
         execute: () => new ActionNode(bb => { try { return (typeof hoverDynamicLine === 'function' ? hoverDynamicLine(bb) : {tx:bb.p.x,ty:bb.p.y,action:'none'}); } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:'none'};} })
     },
+    "actGoToPosition": {
+        cat: "act", label: "Go To Position", acr: "GOTO", req: "ANY",
+        params: { minDistOwnGoal: 150, minDistOppGoal: 100, minDistLeftBoard: 50, minDistRightBoard: 50 },
+        generate: (d) => `new ActionNode(bb => { try { return (typeof getPositionWithinLimits === 'function' ? getPositionWithinLimits(bb.p, bb, ${JSON.stringify(d)}) : {tx:bb.p.x,ty:bb.p.y,action:'none'}); } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:'none'};} })`,
+        execute: (d) => new ActionNode(bb => { try { return (typeof getPositionWithinLimits === 'function' ? getPositionWithinLimits(bb.p, bb, d) : {tx:bb.p.x,ty:bb.p.y,action:'none'}); } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:'none'};} })
+    },
 };
 
 // ... (PALETTE_LAYOUT remains the same)
 const PALETTE_LAYOUT = [
     { header: "FLOW CONTROL" }, "Selector", "Sequence",
     { header: "STATE SETTERS" }, "condHasPuck", "condTeamHasPuck", "condOppHasPuck", "condLoosePuck",
-    { header: "MATRIX / FORMATION" }, "condPuckInZone", "actFormationTarget", "actHoverDynamic",
+    { header: "MATRIX / FORMATION" }, "condPuckInZone", "actFormationTarget", "actHoverDynamic", "actGoToPosition",
     { header: "OFFENSIVE" }, "condInShotRange", "actShoot", "actDriveNet", "condHasBackdoor", "actGoBackdoor", "condSmartPass", "actSmartPass", "condWeightedPassCheck", "actExecuteCarry", "actExecutePass", "actEvadePressure",
     { header: "DEFENSIVE" }, "actDefendHome", "actAggressiveGap", "actClearPuck", "actSupportPosition", "condIsLastMan", "actLastManSafety",
     { header: "NEUTRAL / ZONES" }, "condPuckInDefZone", "condPuckInNeuZone", "condPuckInOffZone", "actSmartIntercept", "actHoverBlueLine", "actRegroup", "actSafetyPosition",
