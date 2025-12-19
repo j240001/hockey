@@ -1,0 +1,301 @@
+{
+  "name": "Montreal",
+  "teamName": "Canadiens",
+  "code": "MTL",
+  "colors": {
+    "main": "#af1e2d",
+    "secondary": "#192168"
+  },
+  "c": [
+    {
+      "type": "Selector",
+      "cat": "struct",
+      "children": [
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "condInShotRange", "cat": "cond" },
+            { "type": "actShoot", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "condPuckInOffZone", "cat": "cond" },
+            { "type": "condWeightedPassCheck", "cat": "cond", "bias": 20, "fear": 30, "vision": 90 },
+            { "type": "actSmartPass", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "condPuckInDefZone", "cat": "cond" },
+            { "type": "condWeightedPassCheck", "cat": "cond", "bias": 80, "fear": 60, "vision": 70 },
+            { "type": "actSmartPass", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "actFormationTarget", "cat": "act", "offsetx": 250, "offsety": 0 }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condTeamHasPuck", "cat": "cond" },
+            { "type": "actFormationTarget", "cat": "act", "offsetx": -70, "offsety": 0 }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condOppHasPuck", "cat": "cond" },
+            { "type": "condPuckInDefZone", "cat": "cond" },
+            { "type": "actFormationTarget", "cat": "act", "offsetx": -200, "offsety": 0 }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condLoosePuck", "cat": "cond" },
+            { "type": "actSmartIntercept", "cat": "act" }
+          ]
+        }
+      ]
+    }
+  ],
+  "lw": [
+    {
+      "type": "Selector",
+      "cat": "struct",
+      "children": [
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "condInShotRange", "cat": "cond" },
+            { "type": "actShoot", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "condPuckInOffZone", "cat": "cond" },
+            { "type": "actFormationTarget", "cat": "act", "offsetx": 250, "offsety": 100 }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "actExecuteCarry", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condTeamHasPuck", "cat": "cond" },
+            { "type": "condPuckInOffZone", "cat": "cond" },
+            { "type": "actFormationTarget", "cat": "act", "offsetx": 100, "offsety": 0 }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condOppHasPuck", "cat": "cond" },
+            { "type": "condPuckInDefZone", "cat": "cond" },
+            { "type": "actFormationTarget", "cat": "act", "offsetx": -200, "offsety": 0 }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condLoosePuck", "cat": "cond" },
+            { "type": "actSmartIntercept", "cat": "act" }
+          ]
+        }
+      ]
+    }
+  ],
+  "rw": [
+    {
+      "type": "Selector",
+      "cat": "struct",
+      "children": [
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "condInShotRange", "cat": "cond" },
+            { "type": "actShoot", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "condPuckInOffZone", "cat": "cond" },
+            { "type": "actFormationTarget", "cat": "act", "offsetx": 250, "offsety": 100 }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "actExecuteCarry", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condTeamHasPuck", "cat": "cond" },
+            { "type": "condPuckInOffZone", "cat": "cond" },
+            { "type": "actFormationTarget", "cat": "act", "offsetx": 100, "offsety": 0 }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condOppHasPuck", "cat": "cond" },
+            { "type": "condPuckInDefZone", "cat": "cond" },
+            { "type": "actFormationTarget", "cat": "act", "offsetx": -200, "offsety": 0 }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condLoosePuck", "cat": "cond" },
+            { "type": "actSmartIntercept", "cat": "act" }
+          ]
+        }
+      ]
+    }
+  ],
+  "ld": [
+    {
+      "type": "Selector",
+      "cat": "struct",
+      "children": [
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "condPuckInDefZone", "cat": "cond" },
+            { "type": "condWeightedPassCheck", "cat": "cond", "bias": 80, "fear": 80, "vision": 40 },
+            { "type": "actSmartPass", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "actExecuteCarry", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condIsLastMan", "cat": "cond" },
+            { "type": "actFormationTarget", "cat": "act", "offsetx": -150, "offsety": 0 }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condOppHasPuck", "cat": "cond" },
+            { "type": "condPuckInDefZone", "cat": "cond" },
+            { "type": "actFormationTarget", "cat": "act", "offsetx": -200, "offsety": 0 }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condLoosePuck", "cat": "cond" },
+            { "type": "actSmartIntercept", "cat": "act" }
+          ]
+        }
+      ]
+    }
+  ],
+  "rd": [
+    {
+      "type": "Selector",
+      "cat": "struct",
+      "children": [
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "condPuckInDefZone", "cat": "cond" },
+            { "type": "condWeightedPassCheck", "cat": "cond", "bias": 80, "fear": 80, "vision": 40 },
+            { "type": "actSmartPass", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "actExecuteCarry", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condIsLastMan", "cat": "cond" },
+            { "type": "actFormationTarget", "cat": "act", "offsetx": -150, "offsety": 0 }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condOppHasPuck", "cat": "cond" },
+            { "type": "condPuckInDefZone", "cat": "cond" },
+            { "type": "actFormationTarget", "cat": "act", "offsetx": -200, "offsety": 0 }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condLoosePuck", "cat": "cond" },
+            { "type": "actSmartIntercept", "cat": "act" }
+          ]
+        }
+      ]
+    }
+  ]
+}

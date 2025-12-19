@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>BRAIN BUILDER V 0030</title>
+<script src="node_registry.js"></script> 
+<style>
+    /* GLOBAL BOX SIZING FIX */
+    * { box-sizing: border-box; }
+    :root { --bg: #1e1e2e; --panel: #252535; --node: #333344; --accent: #7aa2f7; --border: #444; }
+    body { background: var(--bg); color: #c0caf5; font-family: 'Segoe UI', monospace; display: flex; gap: 10px; padding: 10px; height: 98vh; overflow: hidden; font-size: 12px; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #111; }
+    ::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
+    .panel { background: var(--panel); padding: 10px; border-radius: 4px; width: 240px; min-width: 240px; display: flex; flex-direction: column; border: 1px solid var(--border); }
+    .panel h3 { margin: 0 0 10px 0; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 5px; font-size: 14px; }
+    .workspace { flex: 1; background: #16161e; border: 1px solid var(--border); border-radius: 4px; padding: 10px; overflow: auto; display: flex; gap: 10px; min-width: 0; }
+    .tree-column { flex: 1; min-width: 180px; display: flex; flex-direction: column; border-right: 1px dashed #333; padding-right: 5px; padding-bottom: 500px; }
+    .tree-column:last-child { border-right: none; }
+    .tree-column h4 { text-align: center; color: #7dcfff; background: #222; padding: 8px; margin: 0 0 10px 0; border-radius: 3px; font-size: 13px; font-weight: bold; }
+    .main-root { flex: 1; min-height: 150px; border: 2px dashed #333; background: rgba(255,255,255,0.02); border-radius: 4px; margin-bottom: 5px; transition: all 0.2s; cursor: pointer; }
+    .main-root:hover { background: rgba(255,255,255,0.05); border-color: #555; }
+    .tree-block { padding-left: 12px; min-height: 10px; margin-left: 4px; padding-bottom: 10px; }
+    .tree-block:not(.main-root) { border-left: 1px solid #555; }
+    .btn-move { cursor: pointer; color: #666; font-size: 10px; padding: 2px 4px; border-radius: 3px; background: rgba(0,0,0,0.2); }
+    .btn-move:hover { color: #fff; background: var(--accent); }
+    .node { background: var(--node); padding: 4px 8px; border-radius: 3px; margin: 4px 0; display: flex; align-items: center; justify-content: space-between; cursor: pointer; border: 1px solid #444; font-size: 11px; transition: all 0.1s; flex-wrap: wrap; }
+    .node:hover { border-color: var(--accent); background: #3b3b4d; }
+    .node span.del { color: #f7768e; font-weight: bold; cursor: pointer; padding: 0 6px; font-size: 14px; }
+    .node span.label { font-weight: 700; pointer-events: none; letter-spacing: 0.5px; }
+    .node[data-cat="struct"] { border-left: 3px solid #bb9af7; }
+    .node[data-cat="cond"] { border-left: 3px solid #e0af68; }
+    .node[data-cat="act"] { border-left: 3px solid #9ece6a; }
+    button.btn { background: #3b4261; color: white; border: none; padding: 6px; margin-bottom: 3px; width: 100%; text-align: left; cursor: pointer; border-radius: 3px; font-size: 11px; }
+    button.btn:hover { background: var(--accent); color:#111; }
+    button.btn:disabled { background: #1a1a20; color: #444; cursor: not-allowed; border-left: 3px solid #332222; opacity: 0.6; }
+    button.btn-warn { background: #e0af68; color: #111; } /* Restore paste button style */
+    .palette-header { color:#666; font-size:10px; margin-top:10px; margin-bottom:4px; font-weight:bold; }
+    #inspectorFields label { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+    #inspectorFields input { background: #111; border: 1px solid #555; color: #fff; width: 60px; padding: 2px 5px; border-radius: 3px; text-align: right; }
+    .export-area { width: 100%; flex: 1; background: #111; color: #73daca; border: 1px solid var(--border); padding: 10px; font-family: monospace; resize: none; font-size: 10px; border-radius: 4px; margin-top: 5px; }
+    .active-drop { background: rgba(122,162,247,0.15); border-color: var(--accent); }
+</style>
+</head>
+<body>
+
+<div class="panel">
+    <h3>Node Palette</h3>
+    <div id="paletteArea" style="overflow-y:auto; flex:1;"></div>
+</div>
+
+<div class="workspace" id="workspace">
+    <div class="tree-column"> <h4 style="color:#7dcfff">Center (C)</h4> <div id="rootC" class="tree-block main-root"></div> </div>
+    <div class="tree-column"> <h4 style="color:#9ece6a">Left Wing (LW)</h4> <div id="rootLW" class="tree-block main-root"></div> </div>
+    <div class="tree-column"> <h4 style="color:#9ece6a">Right Wing (RW)</h4> <div id="rootRW" class="tree-block main-root"></div> </div>
+    <div class="tree-column"> <h4 style="color:#e0af68">Left Def (LD)</h4> <div id="rootLD" class="tree-block main-root"></div> </div>
+    <div class="tree-column"> <h4 style="color:#e0af68">Right Def (RD)</h4> <div id="rootRD" class="tree-block main-root"></div> </div>
+</div>
+
+<div class="panel">
+    <div style="flex: 0 0 auto; margin-bottom: 10px; border-bottom: 1px solid #444; padding-bottom: 10px;">
+        <h3>Inspector</h3>
+        <div id="inspectorFields" style="font-size:11px;color:#aaa;"><i>Select a node to edit.</i></div>
+        
+        <div style="margin-top:10px; padding-top:10px; border-top:1px dashed #444;">
+            <button id="btnPaste" class="btn btn-warn" onclick="pasteNode()" style="display:none; text-align:center; font-weight:bold;">📋 PASTE NODE</button>
+            <div id="clipboardStatus" style="font-size:10px; color:#666; text-align:center; margin-top:4px;">Clipboard Empty</div>
+        </div>
+
+        <div id="contextDebug" style="font-size:10px; color:#aaa; text-align:center; margin-top:8px; font-family:monospace;">Context: ANY</div>
+    </div>
+    <div style="flex: 0 0 auto; margin-bottom: 20px; border-bottom: 1px solid #444; padding-bottom: 10px;">
+        <h3>Team Settings</h3>
+        
+        <input type="text" id="metaStratName" placeholder="Strategy Name" value="MyStrategy" style="width:100%;background:#111;border:1px solid #555;color:#fff;padding:3px;margin-bottom:5px;">
+        
+        <div style="display:flex; flex-direction: column; gap:5px;">
+            <input type="text" id="metaTeamName" placeholder="Team Name" value="Custom" style="width:100%; background:#111; border:1px solid #555; color:#fff; padding:3px;">
+            <input type="text" id="metaCode" placeholder="Team Code (ABC)" value="CST" maxlength="3" style="width:100%; background:#111; border:1px solid #555; color:#fff; padding:3px; text-align:center;">
+        </div>
+
+        <div style="display:flex; gap:10px; align-items:center; margin-top:5px;">
+            <input type="color" id="metaColor1" value="#b80000" style="border:none; width:40px; height:20px; cursor:pointer; padding:0; background:none;">
+            <input type="color" id="metaColor2" value="#ff9d00" style="border:none; width:40px; height:20px; cursor:pointer; padding:0; background:none;">
+        </div>
+    </div>
+    <h3>Output</h3>
+    <div style="display:flex; gap:5px; margin-bottom:5px;">
+        <button class="btn" onclick="saveLayout()" style="background:#41a6b5; font-weight:bold;">💾 Save JSON</button>
+        <button class="btn" onclick="document.getElementById('fileInput').click()" style="background:#9d7cd8; font-weight:bold;">📂 Load</button>
+        <input type="file" id="fileInput" style="display:none" onchange="loadLayout(this)">
+    </div>
+    <button class="btn" style="background:var(--accent); color:#111; font-weight:bold;" onclick="exportBT()">GENERATE CODE</button>
+    <textarea id="output" class="export-area"></textarea>
+</div>
+
+<script>
+// --- PALETTE GENERATION ---
+(function initPalette() {
+    const area = document.getElementById('paletteArea');
+    if(typeof NODE_REGISTRY === 'undefined') { area.innerHTML = "<div style='color:red'>Error: node_registry.js missing</div>"; return; }
+    
+    PALETTE_LAYOUT.forEach(item => {
+        if (item.header) {
+            const p = document.createElement('div');
+            p.className = 'palette-header';
+            p.innerText = item.header;
+            area.appendChild(p);
+        } else {
+            const type = item;
+            const def = NODE_REGISTRY[type];
+            if(!def) return;
+            const btn = document.createElement('button');
+            btn.className = 'btn';
+            btn.id = `btn_${type}`; 
+            btn.innerText = `${def.label} [${def.acr}]`;
+            btn.onclick = () => addNode(type);
+            area.appendChild(btn);
+        }
+    });
+})();
+
+// --- CORE LOGIC ---
+let selectedBlockId = null;
+let selectedNode = null; 
+let idCounter = 0;
+let clipboardData = null; // Restore Clipboard Memory
+
+document.getElementById('workspace').addEventListener('click', e => {
+    if (!e.target.closest('.node') && !e.target.closest('.tree-block')) deselectAll();
+    const rootBox = e.target.closest('.main-root');
+    if (rootBox && !e.target.closest('.node')) selectBlock(rootBox.id);
+});
+
+// RESTORED KEYBOARD SHORTCUTS
+document.addEventListener('keydown', e => {
+    if (e.ctrlKey && e.key === 'c' && selectedNode) {
+        copyNode(selectedNode);
+        e.preventDefault();
+    }
+    if (e.ctrlKey && e.key === 'v' && selectedBlockId && clipboardData) {
+        pasteNode();
+        e.preventDefault();
+    }
+});
+
+function deselectAll() {
+    document.querySelectorAll('.tree-block').forEach(b => b.style.borderColor = '');
+    document.querySelectorAll('.node').forEach(n => n.style.outline = '');
+    selectedBlockId = null;
+    selectedNode = null;
+    document.getElementById('inspectorFields').innerHTML = "<i>Select a node to edit.</i>";
+    updatePalette("ANY"); 
+}
+
+function getEffectiveContext(blockId) {
+    let el = document.getElementById(blockId);
+    if (!el) return "ANY";
+    const parentNode = el.parentNode; 
+    if (!parentNode || !parentNode.classList.contains('node')) return "ANY";
+    
+    const type = parentNode.dataset.type;
+    if (type === "Selector" || type === "Sequence") {
+        const parentBlock = parentNode.closest('.tree-block');
+        return parentBlock ? getEffectiveContext(parentBlock.id) : "ANY";
+    }
+    return "ANY";
+}
+
+function updatePalette(context) {
+    document.getElementById('contextDebug').innerText = `Context: ${context}`;
+    Object.keys(NODE_REGISTRY).forEach(type => {
+        const def = NODE_REGISTRY[type];
+        const btn = document.getElementById(`btn_${type}`);
+        if (!btn) return;
+        if (def.req && def.req !== "ANY" && def.req !== context) btn.disabled = true;
+        else btn.disabled = false;
+    });
+}
+
+function selectBlock(id) {
+    document.querySelectorAll('.tree-block').forEach(b => b.style.borderColor = '');
+    const el = document.getElementById(id);
+    if(el) {
+        el.style.borderColor = '#7aa2f7';
+        el.style.borderWidth = '2px';
+        selectedBlockId = id;
+        const ctx = getEffectiveContext(id);
+        updatePalette(ctx);
+    }
+}
+
+function addNode(type) {
+    if (!selectedBlockId) { alert("Select a column first."); return; }
+    const def = NODE_REGISTRY[type];
+    const container = document.getElementById(selectedBlockId);
+    const div = document.createElement('div');
+    div.className = 'node';
+    div.dataset.type = type;
+    div.dataset.cat = def.cat;
+    div.draggable = true;
+
+    // Set defaults from registry params
+    if(def.params) {
+        Object.keys(def.params).forEach(k => div.dataset[k] = def.params[k]);
+    }
+
+    // RESTORED COPY BUTTON ICON
+    let innerHTML = `
+        <span class="label">${def.acr}</span> 
+        <div style="margin-left:auto; display:flex; gap:5px;">
+            <span class="btn-move" onclick="copyNodeButton(this)" title="Copy">📄</span>
+            <span class="btn-move" onclick="moveUp(this)">▲</span>
+            <span class="btn-move" onclick="moveDown(this)">▼</span>
+            <span class="del" onclick="event.stopPropagation(); this.closest('.node').remove(); setTimeout(() => selectBlock('${selectedBlockId}'), 50);">x</span>
+        </div>
+    `;
+
+    if (def.cat === 'struct') {
+        const blockId = 'blk_' + (++idCounter);
+        innerHTML += `<div class="tree-block" id="${blockId}"></div>`;
+        setTimeout(() => { selectBlock(blockId); }, 50);
+    }
+
+    div.innerHTML = innerHTML;
+    div.addEventListener('click', e => { e.stopPropagation(); selectNode(div); });
+    container.appendChild(div);
+    
+    // Drag & Drop
+    div.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', null); window.draggedItem = div; setTimeout(()=>div.style.opacity='0.5',0); });
+    div.addEventListener('dragend', e => { div.style.opacity='1'; window.draggedItem=null; document.querySelectorAll('.active-drop').forEach(b=>b.classList.remove('active-drop')); });
+}
+
+// RESTORED COPY/PASTE LOGIC
+function copyNodeButton(btn) { event.stopPropagation(); copyNode(btn.closest('.node')); }
+
+function copyNode(nodeElement) {
+    if (!nodeElement) return;
+    clipboardData = serializeNode(nodeElement);
+    const status = document.getElementById('clipboardStatus');
+    status.innerText = `Copied: ${clipboardData.type}`;
+    status.style.color = "#7aa2f7";
+    document.getElementById('btnPaste').style.display = "block";
+}
+
+function pasteNode() {
+    if (!clipboardData || !selectedBlockId) return;
+    // We wrap the single node in an array because processNodeTree expects a list
+    processNodeTree(selectedBlockId, [clipboardData]);
+    setTimeout(() => selectBlock(selectedBlockId), 50);
+}
+
+function selectNode(div) {
+    document.querySelectorAll('.node').forEach(n => n.style.outline = '');
+    div.style.outline = '2px solid var(--accent)';
+    selectedNode = div; 
+    showInspector(div);
+    const parentBlock = div.closest('.tree-block');
+    if (parentBlock) selectBlock(parentBlock.id);
+}
+
+// --- DYNAMIC INSPECTOR ---
+function showInspector(div) {
+    const f = document.getElementById('inspectorFields');
+    f.innerHTML = '';
+    const type = div.dataset.type;
+    const def = NODE_REGISTRY[type];
+
+    f.innerHTML = `<div style="color:#fff; margin-bottom:5px; font-weight:bold;">${def.label}</div>`;
+
+    // RESTORED CLIPBOARD UI IN INSPECTOR REFRESH
+    f.innerHTML += `<div style="margin-top:10px; padding-top:10px; border-top:1px dashed #444;">
+            <button id="btnPasteInner" class="btn btn-warn" onclick="pasteNode()" style="display:${clipboardData?'block':'none'}; text-align:center; font-weight:bold;">📋 PASTE NODE</button>
+        </div>`;
+
+    if (def.params) {
+        Object.keys(def.params).forEach(key => {
+            const val = div.dataset[key] !== undefined ? div.dataset[key] : def.params[key];
+            const row = document.createElement('div');
+            row.innerHTML = `<label>${key}: <input type="number" id="edit_${key}" value="${val}"></label>`;
+            f.appendChild(row);
+            row.querySelector('input').addEventListener('input', (e) => {
+                div.dataset[key] = e.target.value;
+            });
+        });
+    } else {
+        f.innerHTML += "<div style='color:#666'>No parameters</div>";
+    }
+}
+
+// --- DRAG DROP HELPERS ---
+document.addEventListener('dragover', e => { e.preventDefault(); const block = e.target.closest('.tree-block'); if(block) block.classList.add('active-drop'); });
+document.addEventListener('dragleave', e => { const block = e.target.closest('.tree-block'); if(block) block.classList.remove('active-drop'); });
+document.addEventListener('drop', e => { 
+    e.preventDefault(); 
+    const block = e.target.closest('.tree-block'); 
+    if(block && window.draggedItem) { 
+        if(window.draggedItem.contains(block)) return; 
+        block.classList.remove('active-drop'); 
+        block.appendChild(window.draggedItem);
+        setTimeout(()=>selectBlock(block.id),50); 
+    } 
+});
+function moveUp(btn){ event.stopPropagation(); const n=btn.closest('.node'); if(n.previousElementSibling) n.parentNode.insertBefore(n, n.previousElementSibling); }
+function moveDown(btn){ event.stopPropagation(); const n=btn.closest('.node'); if(n.nextElementSibling) n.parentNode.insertBefore(n.nextElementSibling, n); }
+
+// --- SERIALIZATION ---
+function serializeNode(el) {
+    const type = el.dataset.type;
+    const def = NODE_REGISTRY[type];
+    const data = { type: type, cat: el.dataset.cat };
+    if(def.params) Object.keys(def.params).forEach(k => data[k] = el.dataset[k]);
+    
+    if (data.cat === 'struct') {
+        const block = el.querySelector('.tree-block');
+        data.children = Array.from(block.children).filter(c => c.classList.contains('node')).map(serializeNode);
+    }
+    return data;
+}
+
+function getColumnData(id) {
+    return Array.from(document.getElementById(id).children).filter(c => c.classList.contains('node')).map(serializeNode);
+}
+
+function saveLayout() {
+    const layout = { 
+        name: document.getElementById('metaStratName').value,
+        teamName: document.getElementById('metaTeamName').value,
+        code: document.getElementById('metaCode').value,
+        colors: { main: document.getElementById('metaColor1').value, secondary: document.getElementById('metaColor2').value },
+        c: getColumnData('rootC'), lw: getColumnData('rootLW'), rw: getColumnData('rootRW'), ld: getColumnData('rootLD'), rd: getColumnData('rootRD') 
+    };
+    const blob = new Blob([JSON.stringify(layout, null, 2)], {type: "application/json"});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = (layout.code || "STRAT") + ".json";
+    a.click();
+}
+
+function loadLayout(input) {
+    const file = input.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const layout = JSON.parse(e.target.result);
+            document.getElementById('metaStratName').value = layout.name || "";
+            document.getElementById('metaTeamName').value = layout.teamName || "";
+            document.getElementById('metaCode').value = layout.code || "";
+            if(layout.colors) { document.getElementById('metaColor1').value = layout.colors.main; document.getElementById('metaColor2').value = layout.colors.secondary; }
+            
+            ['c','lw','rw','ld','rd'].forEach(role => {
+                const rootId = 'root' + role.toUpperCase();
+                document.getElementById(rootId).innerHTML = "";
+                if(layout[role]) processNodeTree(rootId, layout[role]);
+            });
+        } catch(err) { alert("Load Error: " + err); }
+    };
+    reader.readAsText(file);
+    input.value = "";
+}
+
+function processNodeTree(targetId, list) {
+    const container = document.getElementById(targetId);
+    list.forEach(data => {
+        const def = NODE_REGISTRY[data.type];
+        if(!def) return;
+        const div = document.createElement('div');
+        div.className = 'node';
+        div.dataset.type = data.type;
+        div.dataset.cat = def.cat;
+        div.draggable = true;
+        if(def.params) Object.keys(def.params).forEach(k => div.dataset[k] = data[k] || def.params[k]);
+
+        // RESTORED COPY ICON IN PROCESS TREE
+        let inner = `<span class="label">${def.acr}</span> 
+        <div style="margin-left:auto; display:flex; gap:5px;">
+            <span class="btn-move" onclick="copyNodeButton(this)" title="Copy">📄</span>
+            <span class="btn-move" onclick="moveUp(this)">▲</span>
+            <span class="btn-move" onclick="moveDown(this)">▼</span>
+            <span class="del" onclick="event.stopPropagation(); this.closest('.node').remove();">x</span>
+        </div>`;
+
+        if (def.cat === 'struct') {
+            const bid = 'blk_' + (++idCounter);
+            inner += `<div class="tree-block" id="${bid}"></div>`;
+        }
+        div.innerHTML = inner;
+        div.addEventListener('click', e => { e.stopPropagation(); selectNode(div); });
+        container.appendChild(div);
+
+        if(def.cat === 'struct' && data.children) {
+            processNodeTree(div.querySelector('.tree-block').id, data.children);
+        }
+    });
+}
+
+
+
+
+// --- CODE GENERATION (DELEGATED TO REGISTRY) ---
+function buildCode(el, indent) {
+    if (!el) return '';
+    const pad = '    '.repeat(indent);
+    const type = el.dataset.type;
+    
+    // Safety check: if node type isn't in registry, return a comment
+    const def = NODE_REGISTRY[type];
+    if (!def) return `${pad}// Error: Unknown Node '${type}'`;
+
+    const data = { ...el.dataset }; 
+
+    if (def.cat === 'struct') {
+        const block = el.querySelector('.tree-block');
+        if (!block) return `${pad}${def.generate('')}`; // Handle empty blocks gracefully
+
+        const childCode = Array.from(block.children)
+            .filter(c => c.classList.contains('node'))
+            .map(child => buildCode(child, indent + 1))
+            .join(',\n');
+        return `${pad}${def.generate(childCode)}`;
+    } else {
+        // This is the key line: it uses the SAFE definition from your new registry
+        return `${pad}${def.generate(data)}`;
+    }
+}
+
+
+
+
+// --- SMART EXPORT FUNCTION (V30 - Anti-Vanish Enabled) ---
+function exportBT() {
+    // 1. SCAN THE WORKSPACE
+    const usedTypes = new Set();
+    document.querySelectorAll('.workspace .node').forEach(n => usedTypes.add(n.dataset.type));
+
+    // 2. DEFINE THE CODE CHUNKS (UPDATED WITH PHYSICS FIXES)
+    const LIB_CORE = `
+    // --- CORE HELPERS (Math & Vision) ---
+    function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+    function normalizeAngle(a) { while (a <= -Math.PI) a += 2 * Math.PI; while (a > Math.PI) a -= 2 * Math.PI; return a; }
+    function pointLineDistance(x1, y1, x2, y2, px, py) {
+        const A = px - x1, B = py - y1, C = x2 - x1, D = y2 - y1;
+        const dot = A*C + B*D, lenSq = C*C + D*D;
+        if (lenSq < 0.001) return Math.hypot(px - x1, py - y1); // Avoid Zero Div
+        const t = Math.max(0, Math.min(1, dot / lenSq));
+        return Math.hypot(px - (x1 + t * C), py - (y1 + t * D));
+    }
+    function getPlayerById(id) { return (typeof players !== 'undefined') ? players.find(p => p.id === id) : null; }
+    function getPuckCarrier() { return (typeof puck !== 'undefined' && puck.ownerId !== null) ? getPlayerById(puck.ownerId) : null; }
+    function isLaneBlocked(x1, y1, x2, y2, team) {
+        if (typeof players === 'undefined') return false;
+        for (const o of players) {
+            if (o.team === team) continue;
+            if (pointLineDistance(x1, y1, x2, y2, o.x, o.y) < 18) return true;
+        }
+        return false;
+    }
+    function predictPuckIntersection(p) {
+        if (typeof puck === 'undefined' || isNaN(puck.x)) return { x: p.x, y: p.y };
+        return { x: puck.x + puck.vx * 10, y: puck.y + puck.vy * 10 };
+    }
+    function getPuckIntercept(p) {
+        if (typeof puck === 'undefined') return {x: p.x, y: p.y};
+        const dist = Math.hypot(puck.x - p.x, puck.y - p.y);
+        const frames = dist / 4.0; 
+        let tx = puck.x + puck.vx * frames;
+        let ty = puck.y + puck.vy * frames;
+        tx = Math.max(120, Math.min(880, tx));
+        ty = Math.max(170, Math.min(430, ty));
+        return { x: tx, y: ty };
+    }
+    `;
+
+    const LIB_MATRIX = `
+    function getFormationZone(puckX, team) {
+        const safeGoal1 = (typeof goal1 !== 'undefined') ? goal1 : 175;
+        const team0AttacksRight = (safeGoal1 < 500);
+        let attackingRight = (team === 0) ? team0AttacksRight : !team0AttacksRight;
+        const forwardDir = attackingRight ? 1 : -1;
+        const RX_CENTER = 500;
+        const D_LINE = RX_CENTER - (forwardDir * 110);
+        const O_LINE = RX_CENTER + (forwardDir * 110);
+        const D_DEEP = RX_CENTER - (forwardDir * 250);
+
+        if (forwardDir === 1) { 
+            if (puckX < D_DEEP) return 1; if (puckX < D_LINE) return 2; if (puckX < RX_CENTER) return 3;
+            if (puckX < O_LINE) return 4; if (puckX < O_LINE + 150) return 5; return 6;
+        } else { 
+            if (puckX > D_DEEP) return 1; if (puckX > D_LINE) return 2; if (puckX > RX_CENTER) return 3;
+            if (puckX > O_LINE) return 4; if (puckX > O_LINE - 150) return 5; return 6;
+        }
+    }`;
+
+    const LIB_LASTMAN = `
+    function amILastMan(p) {
+        const myGoalX = (p.team === 0 ? (typeof goal1 !== 'undefined' ? goal1 : 175) : (typeof goal2 !== 'undefined' ? goal2 : 825));
+        const myDist = Math.abs(p.x - myGoalX);
+        for (const mate of players) {
+            if (mate.team !== p.team || mate.id === p.id || mate.type !== "skater") continue;
+            if (Math.abs(mate.x - myGoalX) < myDist) return false;
+        }
+        return true;
+    }
+    function getLastManSafetyTarget(p) {
+        const myGoalX = (p.team === 0 ? (typeof goal1 !== 'undefined' ? goal1 : 175) : (typeof goal2 !== 'undefined' ? goal2 : 825));
+        const myGoalY = (typeof RY !== 'undefined' ? RY : 300);
+        const attackDir = (myGoalX < 500) ? 1 : -1;
+        let closestDist = 9999, dangerOpp = null;
+        for (const o of players) {
+            if (o.team === p.team) continue;
+            const d = Math.abs(o.x - myGoalX);
+            if (d < closestDist) { closestDist = d; dangerOpp = o; }
+        }
+        if (!dangerOpp) return { tx: myGoalX + (attackDir * 150), ty: myGoalY, action: "none" };
+        let targetX = dangerOpp.x - (attackDir * 180);
+        if (attackDir === 1 && targetX < myGoalX + 120) targetX = myGoalX + 120;
+        if (attackDir === -1 && targetX > myGoalX - 120) targetX = myGoalX - 120;
+        const totalDistX = myGoalX - dangerOpp.x;
+        const myDistX = targetX - dangerOpp.x;
+        if (Math.abs(totalDistX) < 1) return { tx: targetX, ty: myGoalY, action: "none" };
+        const ratio = myDistX / totalDistX;
+        let targetY = dangerOpp.y + (myGoalY - dangerOpp.y) * ratio;
+        targetY = Math.max(160, Math.min(440, targetY));
+        return { tx: targetX, ty: targetY, action: "none" };
+    }`;
+
+    const LIB_BACKDOOR = `
+    function findBackdoorTarget(p) {
+        const enemyGoalX = (p.team === 0 ? (typeof goal2!=='undefined'?goal2:825) : (typeof goal1!=='undefined'?goal1:175));
+        for (const mate of players) {
+            if (mate.team !== p.team || mate.id === p.id || mate.type !== "skater") continue;
+            if (Math.hypot(mate.x - enemyGoalX, mate.y - (typeof RY!=='undefined'?RY:300)) > 140) continue; 
+            if (isLaneBlocked(p.x, p.y, mate.x, mate.y, p.team)) continue;
+            return mate;
+        }
+        return null;
+    }
+    function getBackdoorPosition(p) {
+        const goalRelX = (p.team === 0 ? (typeof goal2!=='undefined'?goal2:825) : (typeof goal1!=='undefined'?goal1:175)) - 500;
+        const dir = Math.sign(goalRelX) || 1;
+        const targetRelX = goalRelX - (dir * 60); 
+        const targetRelY = (puck.y < (typeof RY!=='undefined'?RY:300)) ? 75 : -75; 
+        return { tx: targetRelX + 500, ty: targetRelY + (typeof RY!=='undefined'?RY:300), action: "none" };
+    }`;
+
+    const LIB_SMART_PASS = `
+    function findSmartPass(p, bb) {
+        let best = null, bestScore = -999;
+        const skaters = players.filter(m => m.team === p.team && m.id !== p.id && m.type === "skater");
+        for (const mate of skaters) {
+            if (isLaneBlocked(p.x, p.y, mate.x, mate.y, p.team)) continue;
+            let score = -Math.hypot(mate.x - bb.enemyGoal, mate.y - (typeof RY!=='undefined'?RY:300));
+            for (const o of players) {
+                if (o.team !== p.team && Math.hypot(o.x - mate.x, o.y - mate.y) < 60) score -= 1000;
+            }
+            if (score > bestScore) { bestScore = score; best = mate; }
+        }
+        return best;
+    }`;
+
+const LIB_WEIGHTED_PASS = `
+    function condWeightedPassCheck(bb, bias, fear, vision) {
+        // --- TUNING SECTION (Adjust these to change Team Physics) ---
+        const FWD_BONUS = 3.0;          // Points added for moving closer to enemy net
+        const BWD_PENALTY = -6.0;       // Points subtracted for moving away from enemy net
+        const BLUE_LINE_PENALTY = -20.0;// Penalty for passing out of the Offensive Zone
+        const MIN_PASS_DIST = 50;       // Minimum pixel distance (Safety)
+        // -----------------------------------------------------------
+
+        const p = bb.p;
+        
+        // 1. Calculate Pressure (0.0 to 2.0)
+        let enemyPressure = 0;
+        if (typeof players !== 'undefined') {
+            for (const o of players) {
+                if (o.team === p.team) continue;
+                const d = Math.hypot(o.x - p.x, o.y - p.y);
+                if (d < 60) enemyPressure += 1.0; else if (d < 120) enemyPressure += 0.5;
+            }
+        }
+        enemyPressure = Math.min(2.0, enemyPressure);
+
+        // 2. Evaluate Teammates
+        let bestTeammateScore = -999; 
+        let bestTarget = null;
+        const teammates = (typeof players !== 'undefined') ? players.filter(m => m.team === p.team && m.id !== p.id && m.type !== 'goalie') : [];
+        
+        for (const mate of teammates) {
+            const d = Math.hypot(mate.x - p.x, mate.y - p.y);
+            
+            // Safety Check
+            if (d < MIN_PASS_DIST) continue; 
+
+            let distScore = (d > 100 && d < 400) ? 1.0 : 0.2;
+            let laneBlocked = isLaneBlocked(p.x, p.y, mate.x, mate.y, p.team);
+            
+            if (!laneBlocked) {
+                // DISTANCE LOGIC
+                const myDist = Math.hypot(p.x - bb.enemyGoal, p.y - 300);
+                const mateDist = Math.hypot(mate.x - bb.enemyGoal, mate.y - 300);
+                
+                // PROGRESS SCORE (Uses your Tuning Variables)
+                let progressScore = (myDist - mateDist) > 0 ? FWD_BONUS : BWD_PENALTY;
+
+                // BLUE LINE LOGIC
+                const myRelX = (p.x - bb.safeRX) * bb.forwardDir;     
+                const mateRelX = (mate.x - bb.safeRX) * bb.forwardDir;
+                // If I am deep (25px past center) and mate is not...
+                if (myRelX > 25 && mateRelX < 25) {
+                    progressScore += BLUE_LINE_PENALTY; 
+                }
+
+                const total = distScore + progressScore;
+                if (total > bestTeammateScore) { bestTeammateScore = total; bestTarget = mate; }
+            }
+        }
+
+        // 3. Final Score Calculation
+        // Formula: Bias + (Pressure * Fear) + (BestOption * Vision)
+        let passScore = (bias * 1.0) + (enemyPressure * fear * 1.5) + (bestTeammateScore * vision * 2.0);
+        let carryScore = (100 - bias);
+        
+        // Open Ice Carry Bonus
+        let closestEnemy = 999;
+        if (typeof players !== 'undefined') { for(const o of players) { if(o.team !== p.team) closestEnemy = Math.min(closestEnemy, Math.hypot(o.x-p.x, o.y-p.y)); } }
+        if (closestEnemy > 150) carryScore += 50;
+
+        // Threshold to Pass
+        // Note: bestTeammateScore must be > -10 to prevent passing to a terrible option just because carryScore is low
+        if (passScore > carryScore && bestTarget !== null && bestTeammateScore > -10.0) { 
+            bb.passTarget = bestTarget; 
+            return true; 
+        }
+        return false;
+    }`;
+
+    const LIB_AGGRESSIVE_GAP = `
+    function getAggressiveGapTarget(defender, carrier, goalX) {
+        const IDEAL_GAP = 75; const MIN_DIST_FROM_NET = 80;
+        const gx = goalX; const gy = (typeof RY!=='undefined'?RY:300);
+        const target = carrier || {x:0, y:0};
+        const dx = target.x - gx; const dy = target.y - gy;
+        const distToCarrier = Math.max(1, Math.hypot(dx, dy)); // SAFETY: No Zero Div
+        let tx, ty;
+        if (distToCarrier < MIN_DIST_FROM_NET + 10) {
+            const aggressiveGap = Math.max(35, distToCarrier - MIN_DIST_FROM_NET);
+            const t = (distToCarrier - aggressiveGap) / distToCarrier;
+            tx = gx + t * dx; ty = gy + t * dy;
+        } else {
+            const t = Math.max(0, (distToCarrier - IDEAL_GAP) / distToCarrier);
+            tx = gx + t * dx; ty = gy + t * dy;
+        }
+        if (!isFinite(tx) || !isFinite(ty)) return { tx: 500, ty: 300, action: "none" }; // SAFETY
+        const distToTarget = Math.hypot(tx - defender.x, ty - defender.y);
+        const myDistToNet = Math.hypot(defender.x - gx, defender.y - gy);
+        const isBeat = distToCarrier < myDistToNet;
+        if (isBeat || distToTarget > 120) { return { tx: tx, ty: ty, action: "none" }; }
+        return { tx: tx, ty: ty, action: "none" }; 
+    }`;
+    
+    const LIB_UTILITY = `
+    function checkTeammatesOffside(p) {
+        const forwardDir = (p.team === 0 ? 1 : -1);
+        const blueLineX = 500 + (forwardDir * 110);
+        for(const m of players) {
+            if(m.team === p.team && m.id !== p.id && m.type === 'skater') {
+                if((m.x - blueLineX) * forwardDir > 5) return true;
+            }
+        }
+        return false;
+    }
+    function evadePressure(bb) {
+        let escX = 0, escY = 0, count = 0;
+        for(const o of players) {
+            if(o.team !== bb.p.team && Math.hypot(bb.p.x - o.x, bb.p.y - o.y) < 100) {
+                escX += (bb.p.x - o.x); escY += (bb.p.y - o.y); count++;
+            }
+        }
+        if(count===0) return {tx: 500, ty: 300, action:'none'}; // SAFETY
+        return {tx: bb.p.x + escX, ty: bb.p.y + escY, action:'none'};
+    }
+    function hoverDynamicLine(bb) {
+        const defendingRight = (bb.myGoalX > 500);
+        let deepest = null;
+        for (const pl of players) {
+            if (pl.type !== "skater" || pl.id === bb.p.id) continue;
+            if (!deepest) { deepest = pl; continue; }
+            if (defendingRight) { if (pl.x > deepest.x) deepest = pl; }
+            else { if (pl.x < deepest.x) deepest = pl; }
+        }
+        if (!deepest) return { tx: bb.p.x, ty: bb.p.y, action: "none" };
+        const gap = 80;
+        return { tx: (defendingRight ? deepest.x + gap : deepest.x - gap), ty: (typeof RY!=='undefined'?RY:300), action: "none" };
+    }
+    function clearPuckDefensive(p) {
+        const forwardDir = (p.team === 0 ? 1 : -1);
+        const targetX = p.x + forwardDir * 200;
+        const Y_HIGH = (typeof RY!=='undefined'?RY:300) - 150, Y_LOW = (typeof RY!=='undefined'?RY:300) + 150;
+        return { tx: targetX, ty: (Math.abs(p.y - Y_HIGH) < Math.abs(p.y - Y_LOW) ? Y_HIGH : Y_LOW), action: "shoot" };
+    }`;
+
+    // 3. BUILD THE LIBRARY
+    let helperLibrary = LIB_CORE;
+    if (usedTypes.has("condPuckInZone")) helperLibrary += LIB_MATRIX;
+    if (usedTypes.has("condIsLastMan") || usedTypes.has("actLastManSafety")) helperLibrary += LIB_LASTMAN;
+    if (usedTypes.has("condHasBackdoor") || usedTypes.has("actGoBackdoor")) helperLibrary += LIB_BACKDOOR;
+    if (usedTypes.has("condSmartPass") || usedTypes.has("actSmartPass")) helperLibrary += LIB_SMART_PASS;
+    if (usedTypes.has("condWeightedPassCheck")) helperLibrary += LIB_WEIGHTED_PASS;
+    if (usedTypes.has("actAggressiveGap")) helperLibrary += LIB_AGGRESSIVE_GAP;
+    const utilityNodes = ["condTeammatesOffside", "actEvadePressure", "actHoverDynamic", "actClearPuck"];
+    if (utilityNodes.some(type => usedTypes.has(type))) helperLibrary += LIB_UTILITY;
+
+    // 4. GENERATE FINAL OUTPUT
+    const getRoot = id => { const r = document.getElementById(id).firstElementChild; return r ? buildCode(r,2) : 'null'; };
+    const sName = document.getElementById('metaStratName').value.replace(/["\\]/g, ""); 
+    const tCode = document.getElementById('metaCode').value.replace(/[^a-zA-Z0-9]/g,"").toUpperCase() || "CST";
+    const teamName = document.getElementById('metaTeamName').value.replace(/["\\]/g, "");
+    const color1 = document.getElementById('metaColor1').value;
+    const color2 = document.getElementById('metaColor2').value;
+
+    function makeBB(p) {
+        const safeRX = (typeof RX !== 'undefined') ? RX : 500;
+        const safeGoal1 = (typeof goal1 !== 'undefined') ? goal1 : 175;
+        const safeGoal2 = (typeof goal2 !== 'undefined') ? goal2 : 825;
+        const myGoalX = (p.team === 0 ? safeGoal1 : safeGoal2);
+        const enemyGoal = (p.team === 0 ? safeGoal2 : safeGoal1);
+        const forwardDir = (enemyGoal > myGoalX ? 1 : -1);
+        const carrier = (typeof getPlayerById === 'function' && typeof puck !== 'undefined' && puck.ownerId !== null) ? getPlayerById(puck.ownerId) : null;
+
+        return {
+            p, myGoalX, enemyGoal, forwardDir, safeRX,
+            hasPuck: (typeof puck !== 'undefined' && puck.ownerId === p.id),
+            loosePuck: (typeof puck !== 'undefined' && puck.ownerId === null),
+            oppHasPuck: (carrier && carrier.team !== p.team),
+            teamHasPuck: (carrier && carrier.team === p.team),
+            inShotRange: (Math.hypot(enemyGoal - p.x, (typeof RY !== 'undefined' ? RY : 300) - p.y) < 200),
+            puckInDefZone: (forwardDir === 1 ? puck.x < safeRX - 60 : puck.x > safeRX + 60),
+            puckInOffZone: (forwardDir === 1 ? puck.x > safeRX + 60 : puck.x < safeRX - 60),
+            puckInNeuZone: (Math.abs(puck.x - safeRX) <= 60),
+            interceptPoint: predictPuckIntersection(p),
+            carryTarget: null, passTarget: null
+        };
+    }
+
+    const final = `// ${sName} (${tCode}) - Generated by Builder V30 (Safe Mode)
+(function() {
+    const STRATEGY_ID = "BT_" + "${tCode}_" + Math.floor(Math.random() * 99999);
+
+    // --- ENGINE ---
+    class Node { constructor() {} tick(bb) { return false; } }
+    class ConditionNode extends Node { constructor(fn) { super(); this.fn = fn; } tick(bb) { return this.fn(bb) ? "SUCCESS" : "FAILURE"; } }
+    class ActionNode extends Node { constructor(fn) { super(); this.fn = fn; } tick(bb) { return this.fn(bb); } }
+    class SequenceNode extends Node { constructor(c) { super(); this.children = c; } tick(bb) { for (let n of this.children) { let r = n.tick(bb); if (r !== "SUCCESS") return r; } return "SUCCESS"; } }
+    class SelectorNode extends Node { constructor(c) { super(); this.children = c; } tick(bb) { for (let n of this.children) { let r = n.tick(bb); if (r !== "FAILURE") return r; } return "FAILURE"; } }
+
+${helperLibrary}
+
+    ${makeBB.toString()}
+
+    // --- TREES ---
+    const TREE_C = 
+${getRoot('rootC')};
+    const TREE_LW = 
+${getRoot('rootLW')};
+    const TREE_RW = 
+${getRoot('rootRW')};
+    const TREE_LD = 
+${getRoot('rootLD')};
+    const TREE_RD = 
+${getRoot('rootRD')};
+
+    // --- MAIN BRAIN (ANTI-VANISH SHIELD) ---
+    function think(p) {
+        try {
+            const bb = makeBB(p);
+            let result = null;
+
+            if (p.role === "C") result = TREE_C ? TREE_C.tick(bb) : null;
+            else if (p.role === "LW") result = TREE_LW ? TREE_LW.tick(bb) : null;
+            else if (p.role === "RW") result = TREE_RW ? TREE_RW.tick(bb) : null;
+            else if (p.role === "LD") result = TREE_LD ? TREE_LD.tick(bb) : null;
+            else if (p.role === "RD") result = TREE_RD ? TREE_RD.tick(bb) : null;
+            else result = TREE_C ? TREE_C.tick(bb) : null;
+
+            // CRITICAL CHECK:
+            if (!result || typeof result !== "object" || 
+                isNaN(result.tx) || !isFinite(result.tx) || 
+                isNaN(result.ty) || !isFinite(result.ty)) {
+                return { tx: 500, ty: 300, action: "none" }; // Fallback to Center Ice
+            }
+            return result;
+        } catch (e) {
+            return { tx: 500, ty: 300, action: "none" };
+        }
+    }
+
+    if (typeof registerStrategy === "function") {
+        registerStrategy(
+            STRATEGY_ID,
+            "${sName}",
+            "${teamName}",
+            "${tCode}",
+            think,
+            { main: "${color1}", secondary: "${color2}" }
+        );
+    }
+})();`;
+
+    document.getElementById("output").value = final;
+}
+
+
+
+
+</script>
+</body>
+</html>
