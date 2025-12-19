@@ -45,6 +45,37 @@
         return { x: tx, y: ty };
     }
     
+    function amILastMan(p) {
+        const myGoalX = (p.team === 0 ? (typeof goal1 !== 'undefined' ? goal1 : 175) : (typeof goal2 !== 'undefined' ? goal2 : 825));
+        const myDist = Math.abs(p.x - myGoalX);
+        for (const mate of players) {
+            if (mate.team !== p.team || mate.id === p.id || mate.type !== "skater") continue;
+            if (Math.abs(mate.x - myGoalX) < myDist) return false;
+        }
+        return true;
+    }
+    function getLastManSafetyTarget(p) {
+        const myGoalX = (p.team === 0 ? (typeof goal1 !== 'undefined' ? goal1 : 175) : (typeof goal2 !== 'undefined' ? goal2 : 825));
+        const myGoalY = (typeof RY !== 'undefined' ? RY : 300);
+        const attackDir = (myGoalX < 500) ? 1 : -1;
+        let closestDist = 9999, dangerOpp = null;
+        for (const o of players) {
+            if (o.team === p.team) continue;
+            const d = Math.abs(o.x - myGoalX);
+            if (d < closestDist) { closestDist = d; dangerOpp = o; }
+        }
+        if (!dangerOpp) return { tx: myGoalX + (attackDir * 150), ty: myGoalY, action: "none" };
+        let targetX = dangerOpp.x - (attackDir * 180);
+        if (attackDir === 1 && targetX < myGoalX + 120) targetX = myGoalX + 120;
+        if (attackDir === -1 && targetX > myGoalX - 120) targetX = myGoalX - 120;
+        const totalDistX = myGoalX - dangerOpp.x;
+        const myDistX = targetX - dangerOpp.x;
+        if (Math.abs(totalDistX) < 1) return { tx: targetX, ty: myGoalY, action: "none" };
+        const ratio = myDistX / totalDistX;
+        let targetY = dangerOpp.y + (myGoalY - dangerOpp.y) * ratio;
+        targetY = Math.max(160, Math.min(440, targetY));
+        return { tx: targetX, ty: targetY, action: "none" };
+    }
     function findSmartPass(p, bb) {
         let best = null, bestScore = -999;
         const skaters = players.filter(m => m.team === p.team && m.id !== p.id && m.type === "skater");
@@ -182,60 +213,110 @@
     // --- TREES ---
     const TREE_C = 
         new SelectorNode([            new SequenceNode([                new ConditionNode(bb => bb.hasPuck),
-                new SelectorNode([                    new SequenceNode([                        new ConditionNode(bb => bb.puckInDefZone),
-                        new ConditionNode(bb => { try { return (typeof condWeightedPassCheck === 'function' ? condWeightedPassCheck(bb, 90, 50, 80) : false); } catch(e){return false;} }),
-                        new ActionNode(bb => { try { if(bb.passTarget)return{tx:bb.passTarget.x,ty:bb.passTarget.y,action:"pass",target:bb.passTarget}; return null; } catch(e){return null;} })]),
-                    new SequenceNode([                        new ConditionNode(bb => bb.inShotRange),
-                        new ActionNode(bb => ({ tx: bb.enemyGoal, ty: (typeof RY !== 'undefined' ? RY : 300), action: "shoot" }))]),
-                    new ActionNode(bb => { if(bb.carryTarget)return{tx:bb.carryTarget.x,ty:bb.carryTarget.y,action:"none"}; return {tx:bb.enemyGoal,ty:(typeof RY !== 'undefined' ? RY : 300),action:"none"}; })])]),
-            new SequenceNode([                new ConditionNode(bb => bb.loosePuck),
-                new ActionNode(bb => { try { const t = (typeof getPuckIntercept==='function')?getPuckIntercept(bb.p):{x:puck.x,y:puck.y}; return {tx:t.x,ty:t.y,action:"none"}; } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:"none"};} })]),
+                new ConditionNode(bb => bb.puckInOffZone),
+                new ConditionNode(bb => { try { return (typeof condWeightedPassCheck === 'function' ? condWeightedPassCheck(bb, 80, 80, 30) : false); } catch(e){return false;} }),
+                new ActionNode(bb => { try { if(bb.passTarget)return{tx:bb.passTarget.x,ty:bb.passTarget.y,action:"pass",target:bb.passTarget}; return null; } catch(e){return null;} })]),
             new SequenceNode([                new ConditionNode(bb => bb.oppHasPuck),
-                new ActionNode(bb => { try { return (typeof getAggressiveGapTarget === 'function' ? getAggressiveGapTarget(bb.p, (typeof getPuckCarrier === 'function' ? getPuckCarrier() : puck), bb.myGoalX) : {tx:bb.p.x,ty:bb.p.y,action:'none'}); } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:'none'};} })])]);
+                new ActionNode(bb => { try { return (typeof getAggressiveGapTarget === 'function' ? getAggressiveGapTarget(bb.p, (typeof getPuckCarrier === 'function' ? getPuckCarrier() : puck), bb.myGoalX) : {tx:bb.p.x,ty:bb.p.y,action:'none'}); } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:'none'};} })]),
+            new SequenceNode([                new ConditionNode(bb => bb.hasPuck),
+                new ConditionNode(bb => bb.inShotRange),
+                new ActionNode(bb => ({ tx: bb.enemyGoal, ty: (typeof RY !== 'undefined' ? RY : 300), action: "shoot" }))]),
+            new SequenceNode([                new ConditionNode(bb => bb.teamHasPuck),
+                new ConditionNode(bb => bb.puckInOffZone),
+                new ActionNode(bb => ({ tx: bb.safeRX + (bb.forwardDir * 150), ty: (typeof RY !== 'undefined' ? RY : 300) + -100, action: 'none' }))]),
+            new SequenceNode([                new ConditionNode(bb => bb.hasPuck),
+                new ActionNode(bb => { if(bb.carryTarget)return{tx:bb.carryTarget.x,ty:bb.carryTarget.y,action:"none"}; return {tx:bb.enemyGoal,ty:(typeof RY !== 'undefined' ? RY : 300),action:"none"}; })]),
+            new SequenceNode([                new ConditionNode(bb => bb.oppHasPuck),
+                new ActionNode(bb => { try { return (typeof getAggressiveGapTarget === 'function' ? getAggressiveGapTarget(bb.p, (typeof getPuckCarrier === 'function' ? getPuckCarrier() : puck), bb.myGoalX) : {tx:bb.p.x,ty:bb.p.y,action:'none'}); } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:'none'};} })]),
+            new SequenceNode([                new ConditionNode(bb => bb.teamHasPuck),
+                new ActionNode(bb => ({ tx: bb.safeRX + (bb.forwardDir * -100), ty: (typeof RY !== 'undefined' ? RY : 300) + 0, action: 'none' }))]),
+            new SequenceNode([                new ConditionNode(bb => bb.loosePuck),
+                new ActionNode(bb => { try { const t = (typeof getPuckIntercept==='function')?getPuckIntercept(bb.p):{x:puck.x,y:puck.y}; return {tx:t.x,ty:t.y,action:"none"}; } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:"none"};} })])]);
     const TREE_LW = 
-        new SelectorNode([            new SequenceNode([                new ConditionNode(bb => bb.hasPuck),
-                new SelectorNode([                    new SequenceNode([                        new ConditionNode(bb => bb.puckInDefZone),
-                        new ConditionNode(bb => { try { return (typeof condWeightedPassCheck === 'function' ? condWeightedPassCheck(bb, 80, 60, 70) : false); } catch(e){return false;} }),
-                        new ActionNode(bb => { try { if(bb.passTarget)return{tx:bb.passTarget.x,ty:bb.passTarget.y,action:"pass",target:bb.passTarget}; return null; } catch(e){return null;} })]),
-                    new SequenceNode([                        new ConditionNode(bb => bb.inShotRange),
-                        new ActionNode(bb => ({ tx: bb.enemyGoal, ty: (typeof RY !== 'undefined' ? RY : 300), action: "shoot" }))]),
-                    new ActionNode(bb => { if(bb.carryTarget)return{tx:bb.carryTarget.x,ty:bb.carryTarget.y,action:"none"}; return {tx:bb.enemyGoal,ty:(typeof RY !== 'undefined' ? RY : 300),action:"none"}; })])]),
-            new SequenceNode([                new ConditionNode(bb => bb.puckInDefZone),
-                new ActionNode(bb => ({ tx: bb.safeRX + (bb.forwardDir * -100), ty: (typeof RY !== 'undefined' ? RY : 300) + -100, action: 'none' }))]),
+        new SelectorNode([            new SequenceNode([                new ConditionNode(bb => bb.oppHasPuck),
+                new ActionNode(bb => { try { return (typeof getAggressiveGapTarget === 'function' ? getAggressiveGapTarget(bb.p, (typeof getPuckCarrier === 'function' ? getPuckCarrier() : puck), bb.myGoalX) : {tx:bb.p.x,ty:bb.p.y,action:'none'}); } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:'none'};} })]),
+            new SequenceNode([                new ConditionNode(bb => bb.teamHasPuck),
+                new ConditionNode(bb => bb.puckInOffZone),
+                new ActionNode(bb => ({ tx: bb.safeRX + (bb.forwardDir * 250), ty: (typeof RY !== 'undefined' ? RY : 300) + 0, action: 'none' }))]),
+            new SequenceNode([                new ConditionNode(bb => bb.hasPuck),
+                new ActionNode(bb => { if(bb.carryTarget)return{tx:bb.carryTarget.x,ty:bb.carryTarget.y,action:"none"}; return {tx:bb.enemyGoal,ty:(typeof RY !== 'undefined' ? RY : 300),action:"none"}; })]),
+            new SequenceNode([                new ConditionNode(bb => bb.teamHasPuck),
+                new ConditionNode(bb => bb.puckInOffZone),
+                new ActionNode(bb => ({ tx: bb.safeRX + (bb.forwardDir * 150), ty: (typeof RY !== 'undefined' ? RY : 300) + -100, action: 'none' }))]),
+            new SequenceNode([                new ConditionNode(bb => bb.teamHasPuck),
+                new ConditionNode(bb => bb.puckInOffZone),
+                new ActionNode(bb => ({ tx: bb.safeRX + (bb.forwardDir * 150), ty: (typeof RY !== 'undefined' ? RY : 300) + -100, action: 'none' }))]),
+            new SequenceNode([                new ConditionNode(bb => bb.loosePuck),
+                new ConditionNode(bb => {let c=null,d=9999;for(let m of players){if(m.team===bb.p.team && m.type==='skater'){let dist=Math.hypot(m.x-puck.x,m.y-puck.y);if(dist<d){d=dist;c=m;}}}return c&&c.id===bb.p.id;}),
+                new ActionNode(bb => { try { const t = (typeof getPuckIntercept==='function')?getPuckIntercept(bb.p):{x:puck.x,y:puck.y}; return {tx:t.x,ty:t.y,action:"none"}; } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:"none"};} })]),
+            new SequenceNode([                new ConditionNode(bb => bb.hasPuck),
+                new ConditionNode(bb => bb.puckInNeuZone),
+                new ActionNode(bb => ({ tx: bb.enemyGoal, ty: (typeof RY !== 'undefined' ? RY : 300), action: "shoot" }))]),
+            new SequenceNode([                new ConditionNode(bb => bb.hasPuck),
+                new ActionNode(bb => { if(bb.carryTarget)return{tx:bb.carryTarget.x,ty:bb.carryTarget.y,action:"none"}; return {tx:bb.enemyGoal,ty:(typeof RY !== 'undefined' ? RY : 300),action:"none"}; })]),
+            new SequenceNode([                new ConditionNode(bb => bb.oppHasPuck),
+                new ActionNode(bb => { try { return (typeof getAggressiveGapTarget === 'function' ? getAggressiveGapTarget(bb.p, (typeof getPuckCarrier === 'function' ? getPuckCarrier() : puck), bb.myGoalX) : {tx:bb.p.x,ty:bb.p.y,action:'none'}); } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:'none'};} })]),
+            new SequenceNode([                new ConditionNode(bb => bb.teamHasPuck),
+                new ActionNode(bb => ({ tx: bb.safeRX + (bb.forwardDir * -100), ty: (typeof RY !== 'undefined' ? RY : 300) + 0, action: 'none' }))]),
             new SequenceNode([                new ConditionNode(bb => bb.loosePuck),
                 new ActionNode(bb => { try { const t = (typeof getPuckIntercept==='function')?getPuckIntercept(bb.p):{x:puck.x,y:puck.y}; return {tx:t.x,ty:t.y,action:"none"}; } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:"none"};} })])]);
     const TREE_RW = 
-        new SelectorNode([            new SequenceNode([                new ConditionNode(bb => bb.hasPuck),
-                new SelectorNode([                    new SequenceNode([                        new ConditionNode(bb => bb.puckInDefZone),
-                        new ConditionNode(bb => { try { return (typeof condWeightedPassCheck === 'function' ? condWeightedPassCheck(bb, 80, 60, 70) : false); } catch(e){return false;} }),
-                        new ActionNode(bb => { try { if(bb.passTarget)return{tx:bb.passTarget.x,ty:bb.passTarget.y,action:"pass",target:bb.passTarget}; return null; } catch(e){return null;} })]),
-                    new SequenceNode([                        new ConditionNode(bb => bb.inShotRange),
-                        new ActionNode(bb => ({ tx: bb.enemyGoal, ty: (typeof RY !== 'undefined' ? RY : 300), action: "shoot" }))]),
-                    new ActionNode(bb => { if(bb.carryTarget)return{tx:bb.carryTarget.x,ty:bb.carryTarget.y,action:"none"}; return {tx:bb.enemyGoal,ty:(typeof RY !== 'undefined' ? RY : 300),action:"none"}; })])]),
-            new SequenceNode([                new ConditionNode(bb => bb.puckInDefZone),
-                new ActionNode(bb => ({ tx: bb.safeRX + (bb.forwardDir * -100), ty: (typeof RY !== 'undefined' ? RY : 300) + 100, action: 'none' }))]),
+        new SelectorNode([            new SequenceNode([                new ConditionNode(bb => bb.oppHasPuck),
+                new ActionNode(bb => { try { return (typeof getAggressiveGapTarget === 'function' ? getAggressiveGapTarget(bb.p, (typeof getPuckCarrier === 'function' ? getPuckCarrier() : puck), bb.myGoalX) : {tx:bb.p.x,ty:bb.p.y,action:'none'}); } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:'none'};} })]),
+            new SequenceNode([                new ConditionNode(bb => bb.hasPuck),
+                new ConditionNode(bb => bb.inShotRange),
+                new ActionNode(bb => ({ tx: bb.enemyGoal, ty: (typeof RY !== 'undefined' ? RY : 300), action: "shoot" }))]),
+            new SequenceNode([                new ConditionNode(bb => bb.teamHasPuck),
+                new ConditionNode(bb => bb.puckInOffZone),
+                new ActionNode(bb => ({ tx: bb.safeRX + (bb.forwardDir * 250), ty: (typeof RY !== 'undefined' ? RY : 300) + 0, action: 'none' }))]),
+            new SequenceNode([                new ConditionNode(bb => bb.teamHasPuck),
+                new ConditionNode(bb => bb.puckInOffZone),
+                new ActionNode(bb => ({ tx: bb.safeRX + (bb.forwardDir * 150), ty: (typeof RY !== 'undefined' ? RY : 300) + -100, action: 'none' }))]),
+            new SequenceNode([                new ConditionNode(bb => bb.hasPuck),
+                new ActionNode(bb => { if(bb.carryTarget)return{tx:bb.carryTarget.x,ty:bb.carryTarget.y,action:"none"}; return {tx:bb.enemyGoal,ty:(typeof RY !== 'undefined' ? RY : 300),action:"none"}; })]),
+            new SequenceNode([                new ConditionNode(bb => bb.oppHasPuck),
+                new ActionNode(bb => { try { return (typeof getAggressiveGapTarget === 'function' ? getAggressiveGapTarget(bb.p, (typeof getPuckCarrier === 'function' ? getPuckCarrier() : puck), bb.myGoalX) : {tx:bb.p.x,ty:bb.p.y,action:'none'}); } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:'none'};} })]),
+            new SequenceNode([                new ConditionNode(bb => bb.teamHasPuck),
+                new ActionNode(bb => ({ tx: bb.safeRX + (bb.forwardDir * -100), ty: (typeof RY !== 'undefined' ? RY : 300) + 0, action: 'none' }))]),
             new SequenceNode([                new ConditionNode(bb => bb.loosePuck),
                 new ActionNode(bb => { try { const t = (typeof getPuckIntercept==='function')?getPuckIntercept(bb.p):{x:puck.x,y:puck.y}; return {tx:t.x,ty:t.y,action:"none"}; } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:"none"};} })])]);
     const TREE_LD = 
         new SelectorNode([            new SequenceNode([                new ConditionNode(bb => bb.hasPuck),
-                new SelectorNode([                    new SequenceNode([                        new ConditionNode(bb => bb.inShotRange),
-                        new ActionNode(bb => ({ tx: bb.enemyGoal, ty: (typeof RY !== 'undefined' ? RY : 300), action: "shoot" }))]),
-                    new SequenceNode([                        new ConditionNode(bb => { try { return (typeof condWeightedPassCheck === 'function' ? condWeightedPassCheck(bb, 80, 50, 80) : false); } catch(e){return false;} }),
-                        new ActionNode(bb => { try { if(bb.passTarget)return{tx:bb.passTarget.x,ty:bb.passTarget.y,action:"pass",target:bb.passTarget}; return null; } catch(e){return null;} })]),
-                    new ActionNode(bb => { if(bb.carryTarget)return{tx:bb.carryTarget.x,ty:bb.carryTarget.y,action:"none"}; return {tx:bb.enemyGoal,ty:(typeof RY !== 'undefined' ? RY : 300),action:"none"}; })])]),
+                new ConditionNode(bb => bb.inShotRange),
+                new ActionNode(bb => ({ tx: bb.enemyGoal, ty: (typeof RY !== 'undefined' ? RY : 300), action: "shoot" }))]),
+            new SequenceNode([                new ConditionNode(bb => bb.hasPuck),
+                new ConditionNode(bb => bb.puckInDefZone),
+                new ConditionNode(bb => { try { return (typeof condWeightedPassCheck === 'function' ? condWeightedPassCheck(bb, 90, 60, 70) : false); } catch(e){return false;} }),
+                new ActionNode(bb => { try { if(bb.passTarget)return{tx:bb.passTarget.x,ty:bb.passTarget.y,action:"pass",target:bb.passTarget}; return null; } catch(e){return null;} })]),
+            new SequenceNode([                new ConditionNode(bb => bb.hasPuck),
+                new ConditionNode(bb => bb.puckInDefZone),
+                new ConditionNode(bb => { try { return (typeof condWeightedPassCheck === 'function' ? condWeightedPassCheck(bb, 90, 60, 70) : false); } catch(e){return false;} }),
+                new ActionNode(bb => { try { if(bb.passTarget)return{tx:bb.passTarget.x,ty:bb.passTarget.y,action:"pass",target:bb.passTarget}; return null; } catch(e){return null;} })]),
+            new SequenceNode([                new ConditionNode(bb => bb.hasPuck),
+                new ActionNode(bb => { if(bb.carryTarget)return{tx:bb.carryTarget.x,ty:bb.carryTarget.y,action:"none"}; return {tx:bb.enemyGoal,ty:(typeof RY !== 'undefined' ? RY : 300),action:"none"}; })]),
             new SequenceNode([                new ConditionNode(bb => bb.oppHasPuck),
-                new ActionNode(bb => { let yOff=(bb.p.role==='LD'||bb.p.role==='LW')?-60:60; return {tx:bb.myGoalX+(bb.forwardDir*120),ty:(typeof RY !== 'undefined' ? RY : 300)+yOff,action:'none'}; })]),
+                new ActionNode(bb => { try { return (typeof getAggressiveGapTarget === 'function' ? getAggressiveGapTarget(bb.p, (typeof getPuckCarrier === 'function' ? getPuckCarrier() : puck), bb.myGoalX) : {tx:bb.p.x,ty:bb.p.y,action:'none'}); } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:'none'};} })]),
+            new SequenceNode([                new ConditionNode(bb => bb.teamHasPuck),
+                new ActionNode(bb => ({ tx: bb.safeRX + (bb.forwardDir * -100), ty: (typeof RY !== 'undefined' ? RY : 300) + 0, action: 'none' }))]),
             new SequenceNode([                new ConditionNode(bb => bb.loosePuck),
                 new ActionNode(bb => { try { const t = (typeof getPuckIntercept==='function')?getPuckIntercept(bb.p):{x:puck.x,y:puck.y}; return {tx:t.x,ty:t.y,action:"none"}; } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:"none"};} })])]);
     const TREE_RD = 
-        new SelectorNode([            new SequenceNode([                new ConditionNode(bb => bb.hasPuck),
-                new SelectorNode([                    new SequenceNode([                        new ConditionNode(bb => bb.inShotRange),
-                        new ActionNode(bb => ({ tx: bb.enemyGoal, ty: (typeof RY !== 'undefined' ? RY : 300), action: "shoot" }))]),
-                    new SequenceNode([                        new ConditionNode(bb => { try { return (typeof condWeightedPassCheck === 'function' ? condWeightedPassCheck(bb, 80, 50, 80) : false); } catch(e){return false;} }),
-                        new ActionNode(bb => { try { if(bb.passTarget)return{tx:bb.passTarget.x,ty:bb.passTarget.y,action:"pass",target:bb.passTarget}; return null; } catch(e){return null;} })]),
-                    new ActionNode(bb => { if(bb.carryTarget)return{tx:bb.carryTarget.x,ty:bb.carryTarget.y,action:"none"}; return {tx:bb.enemyGoal,ty:(typeof RY !== 'undefined' ? RY : 300),action:"none"}; })])]),
+        new SelectorNode([            new SequenceNode([                new ConditionNode(bb => { try { return (typeof amILastMan === 'function' ? amILastMan(bb.p) : false); } catch(e){return false;} }),
+                new ActionNode(bb => ({ tx: bb.safeRX + (bb.forwardDir * -150), ty: (typeof RY !== 'undefined' ? RY : 300) + 0, action: 'none' }))]),
+            new SequenceNode([                new ConditionNode(bb => bb.teamHasPuck),
+                new ConditionNode(bb => bb.puckInOffZone),
+                new ActionNode(bb => ({ tx: bb.safeRX + (bb.forwardDir * 150), ty: (typeof RY !== 'undefined' ? RY : 300) + -100, action: 'none' }))]),
+            new SequenceNode([                new ConditionNode(bb => bb.loosePuck),
+                new ConditionNode(bb => {let c=null,d=9999;for(let m of players){if(m.team===bb.p.team && m.type==='skater'){let dist=Math.hypot(m.x-puck.x,m.y-puck.y);if(dist<d){d=dist;c=m;}}}return c&&c.id===bb.p.id;}),
+                new ActionNode(bb => { try { const t = (typeof getPuckIntercept==='function')?getPuckIntercept(bb.p):{x:puck.x,y:puck.y}; return {tx:t.x,ty:t.y,action:"none"}; } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:"none"};} })]),
+            new SequenceNode([                new ConditionNode(bb => bb.hasPuck),
+                new ActionNode(bb => { if(bb.carryTarget)return{tx:bb.carryTarget.x,ty:bb.carryTarget.y,action:"none"}; return {tx:bb.enemyGoal,ty:(typeof RY !== 'undefined' ? RY : 300),action:"none"}; })]),
+            new SequenceNode([                new ConditionNode(bb => bb.hasPuck),
+                new ActionNode(bb => { if(bb.carryTarget)return{tx:bb.carryTarget.x,ty:bb.carryTarget.y,action:"none"}; return {tx:bb.enemyGoal,ty:(typeof RY !== 'undefined' ? RY : 300),action:"none"}; })]),
             new SequenceNode([                new ConditionNode(bb => bb.oppHasPuck),
-                new ActionNode(bb => { let yOff=(bb.p.role==='LD'||bb.p.role==='LW')?-60:60; return {tx:bb.myGoalX+(bb.forwardDir*120),ty:(typeof RY !== 'undefined' ? RY : 300)+yOff,action:'none'}; })]),
+                new ActionNode(bb => { try { return (typeof getAggressiveGapTarget === 'function' ? getAggressiveGapTarget(bb.p, (typeof getPuckCarrier === 'function' ? getPuckCarrier() : puck), bb.myGoalX) : {tx:bb.p.x,ty:bb.p.y,action:'none'}); } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:'none'};} })]),
+            new SequenceNode([                new ConditionNode(bb => bb.teamHasPuck),
+                new ActionNode(bb => ({ tx: bb.safeRX + (bb.forwardDir * -100), ty: (typeof RY !== 'undefined' ? RY : 300) + 0, action: 'none' }))]),
             new SequenceNode([                new ConditionNode(bb => bb.loosePuck),
                 new ActionNode(bb => { try { const t = (typeof getPuckIntercept==='function')?getPuckIntercept(bb.p):{x:puck.x,y:puck.y}; return {tx:t.x,ty:t.y,action:"none"}; } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:"none"};} })])]);
 
