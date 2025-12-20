@@ -157,6 +157,19 @@ const NODE_REGISTRY = {
         execute: () => new ActionNode(bb => { try { return (typeof evadePressure === 'function' ? evadePressure(bb) : {tx:bb.p.x,ty:bb.p.y,action:'none'}); } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:'none'};} })
     },
 
+    "actSmartShoot": {
+        cat: "act", label: "Smart Shoot", acr: "SSHOT", req: "ANY",
+        // FIX: Check for null and return "FAILURE" string
+        generate: () => `new ActionNode(bb => { try { const r = (typeof getSmartShootTarget === 'function' ? getSmartShootTarget(bb.p, bb) : null); return r ? r : "FAILURE"; } catch(e){return "FAILURE";} })`,
+        execute: () => new ActionNode(bb => { try { const r = (typeof getSmartShootTarget === 'function' ? getSmartShootTarget(bb.p, bb) : null); return r ? r : "FAILURE"; } catch(e){return "FAILURE";} })
+    },
+
+    "actOzoneReliefPass": {
+        cat: "act", label: "Ozone Relief Pass", acr: "RELIEF", req: "ANY",
+        // FIX: Check for null and return "FAILURE" string
+        generate: () => `new ActionNode(bb => { try { const t = (typeof findLeastGuardedInZone === 'function' ? findLeastGuardedInZone(bb.p, bb) : null); if(t){ return {tx:t.x, ty:t.y, action:"pass", target:t}; } return "FAILURE"; } catch(e){return "FAILURE";} })`,
+        execute: () => new ActionNode(bb => { try { const t = (typeof findLeastGuardedInZone === 'function' ? findLeastGuardedInZone(bb.p, bb) : null); if(t){ return {tx:t.x, ty:t.y, action:"pass", target:t}; } return "FAILURE"; } catch(e){return "FAILURE";} })
+    },
     // --- ACTIONS: DEFENSE ---
     "actDefendHome": {
         cat: "act", label: "Defend Home", acr: "HOME", req: "ANY",
@@ -250,7 +263,7 @@ const PALETTE_LAYOUT = [
     { header: "FLOW CONTROL" }, "Selector", "Sequence",
     { header: "STATE SETTERS" }, "condHasPuck", "condTeamHasPuck", "condOppHasPuck", "condLoosePuck",
     { header: "MATRIX / FORMATION" }, "condPuckInZone", "actFormationTarget", "actHoverDynamic", "actGoToPosition",
-    { header: "OFFENSIVE" }, "condInShotRange", "actShoot", "actDriveNet", "condHasBackdoor", "actGoBackdoor", "condSmartPass", "actSmartPass", "condWeightedPassCheck", "actExecuteCarry", "actExecutePass", "actEvadePressure",
+    { header: "OFFENSIVE" }, "condInShotRange", "actShoot", "actSmartShoot", "actOzoneReliefPass", "actDriveNet", "condHasBackdoor", "actGoBackdoor", "condSmartPass", "actSmartPass", "condWeightedPassCheck", "actExecuteCarry", "actExecutePass", "actEvadePressure",
     { header: "DEFENSIVE" }, "actDefendHome", "actAggressiveGap", "actClearPuck", "actSupportPosition", "condIsLastMan", "actLastManSafety",
     { header: "NEUTRAL / ZONES" }, "condPuckInDefZone", "condPuckInNeuZone", "condPuckInOffZone", "actSmartIntercept", "actHoverBlueLine", "actRegroup", "actSafetyPosition",
     { header: "OFFSIDE LOGIC" }, "condTeammatesOffside", "actTagUp_T1",

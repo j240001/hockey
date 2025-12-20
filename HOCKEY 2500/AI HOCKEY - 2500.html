@@ -512,7 +512,7 @@ function handleTrainingInput(e) {
         if (trainingIndex === 4) {
             train_rounds += dir;
             if (train_rounds < 1) train_rounds = 1;
-            if (train_rounds > 27) train_rounds = 27;
+            if (train_rounds > 77) train_rounds = 77;
         }
         
         // Episodes (Index 5) - UPDATED FOR INFINITE MODE
@@ -3993,7 +3993,7 @@ function updateAISkater(p) {
     // --- THROTTLE CONTROL ---
     let drive = 0.055; 
     if (p.role === "C" || p.role === "S" || p.role === "Attacker") drive = 0.06; 
-    if (distToTarget < 12) drive = .01; 
+    if (distToTarget < 12) drive = .001; 
 
     // =========================================================
     // *** THE FIX: SMART APPROACH BRAKING ***

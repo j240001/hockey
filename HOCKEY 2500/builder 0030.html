@@ -435,14 +435,14 @@ function exportBT() {
     document.querySelectorAll('.workspace .node').forEach(n => usedTypes.add(n.dataset.type));
 
     // 2. DEFINE THE CODE CHUNKS (UPDATED WITH PHYSICS FIXES)
-    const LIB_CORE = `
+const LIB_CORE = `
     // --- CORE HELPERS (Math & Vision) ---
     function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
     function normalizeAngle(a) { while (a <= -Math.PI) a += 2 * Math.PI; while (a > Math.PI) a -= 2 * Math.PI; return a; }
     function pointLineDistance(x1, y1, x2, y2, px, py) {
         const A = px - x1, B = py - y1, C = x2 - x1, D = y2 - y1;
         const dot = A*C + B*D, lenSq = C*C + D*D;
-        if (lenSq < 0.001) return Math.hypot(px - x1, py - y1); // Avoid Zero Div
+        if (lenSq < 0.001) return Math.hypot(px - x1, py - y1);
         const t = Math.max(0, Math.min(1, dot / lenSq));
         return Math.hypot(px - (x1 + t * C), py - (y1 + t * D));
     }
@@ -452,6 +452,8 @@ function exportBT() {
         if (typeof players === 'undefined') return false;
         for (const o of players) {
             if (o.team === team) continue;
+            // IGNORE GOALIE IN GENERAL BLOCK CHECKS
+            if (o.type === 'goalie') continue; 
             if (pointLineDistance(x1, y1, x2, y2, o.x, o.y) < 18) return true;
         }
         return false;
@@ -469,6 +471,33 @@ function exportBT() {
         tx = Math.max(120, Math.min(880, tx));
         ty = Math.max(170, Math.min(430, ty));
         return { x: tx, y: ty };
+    }
+    
+    // --- NEW VISION CHECK ---
+    function canSeeNet(p) {
+        const goalX = (p.team === 0) ? (typeof goal2!=='undefined'?goal2:825) : (typeof goal1!=='undefined'?goal1:175);
+        const goalY = (typeof RY !== 'undefined' ? RY : 300);
+        
+        // 1. DEAD ANGLE CHECK (The Fix)
+        // If we are attacking Right (Goal > 500), we must be to the LEFT of the goal line.
+        // If we are attacking Left (Goal < 500), we must be to the RIGHT of the goal line.
+        // We add a 10px buffer so they don't shoot from zero-angle either.
+        const attackingRight = (goalX > 500);
+        
+        if (attackingRight) {
+            if (p.x > goalX - 10) return false; // Too deep!
+        } else {
+            if (p.x < goalX + 10) return false; // Too deep!
+        }
+
+        // 2. OBSTACLE CHECK
+        for (const o of players) {
+            if (o.team === p.team) continue;
+            if (o.type === "goalie") continue; 
+            const distToShot = pointLineDistance(p.x, p.y, goalX, goalY, o.x, o.y);
+            if (distToShot < 15) return false;
+        }
+        return true;
     }
     `;
 
@@ -491,6 +520,60 @@ function exportBT() {
             if (puckX > O_LINE) return 4; if (puckX > O_LINE - 150) return 5; return 6;
         }
     }`;
+
+
+
+    const LIB_OZONE_SMART = `
+    function getSmartShootTarget(p, bb) {
+        const targetX = bb.enemyGoal;
+        const targetY = (typeof RY !== 'undefined' ? RY : 300);
+        
+        // USE NEW VISION CHECK
+        if (canSeeNet(p)) {
+             return { tx: targetX, ty: targetY, action: "shoot" };
+        }
+        return null;
+    }
+
+    function findLeastGuardedInZone(p, bb) {
+        let bestTeammate = null, maxSafetyScore = -1;
+        if (typeof players === 'undefined') return null;
+        for (let m of players) {
+            if (m.team === p.team && m.id !== p.id && m.type === 'skater') {
+                const inOzone = (m.x - 500) * bb.forwardDir > 110; 
+                if (!inOzone) continue;
+                if (isLaneBlocked(p.x, p.y, m.x, m.y, p.team)) continue;
+                let minOppDist = 9999;
+                for (let opp of players) {
+                    if (opp.team !== p.team) {
+                        const d = Math.hypot(m.x - opp.x, m.y - opp.y);
+                        if (d < minOppDist) minOppDist = d;
+                    }
+                }
+                if (minOppDist > maxSafetyScore) { maxSafetyScore = minOppDist; bestTeammate = m; }
+            }
+        }
+        return bestTeammate;
+    }`;
+
+
+    const LIB_GOTO = `
+    function getPositionWithinLimits(p, bb, d) {
+        const rinkTop = (typeof RY !== 'undefined' ? RY : 300) - 170; 
+        const rinkBot = (typeof RY !== 'undefined' ? RY : 300) + 170;
+        // FORCE NUMBERS to prevent teleportation bug
+        const minOwn = Number(d.minDistOwnGoal || 0);
+        const minOpp = Number(d.minDistOppGoal || 0);
+        const minLeft = Number(d.minDistLeftBoard || 0);
+        const minRight = Number(d.minDistRightBoard || 0);
+        let moveX = p.x, moveY = p.y, needsMove = false;
+        if (Math.abs(p.x - bb.myGoalX) < minOwn) { moveX = bb.myGoalX + (bb.forwardDir * minOwn); needsMove = true; } 
+        else if (Math.abs(p.x - bb.enemyGoal) < minOpp) { moveX = bb.enemyGoal - (bb.forwardDir * minOpp); needsMove = true; }
+        if (Math.abs(p.y - rinkTop) < minLeft) { moveY = rinkTop + minLeft; needsMove = true; } 
+        else if (Math.abs(p.y - rinkBot) < minRight) { moveY = rinkBot - minRight; needsMove = true; }
+        return { tx: moveX, ty: moveY, action: "none" };
+    }`;
+
 
     const LIB_LASTMAN = `
     function amILastMan(p) {
@@ -703,6 +786,7 @@ const LIB_WEIGHTED_PASS = `
     // 3. BUILD THE LIBRARY
     let helperLibrary = LIB_CORE;
     if (usedTypes.has("condPuckInZone")) helperLibrary += LIB_MATRIX;
+    if (usedTypes.has("actSmartShoot") || usedTypes.has("actOzoneReliefPass")) helperLibrary += LIB_OZONE_SMART;
     if (usedTypes.has("condIsLastMan") || usedTypes.has("actLastManSafety")) helperLibrary += LIB_LASTMAN;
     if (usedTypes.has("condHasBackdoor") || usedTypes.has("actGoBackdoor")) helperLibrary += LIB_BACKDOOR;
     if (usedTypes.has("condSmartPass") || usedTypes.has("actSmartPass")) helperLibrary += LIB_SMART_PASS;
@@ -734,7 +818,7 @@ const LIB_WEIGHTED_PASS = `
             loosePuck: (typeof puck !== 'undefined' && puck.ownerId === null),
             oppHasPuck: (carrier && carrier.team !== p.team),
             teamHasPuck: (carrier && carrier.team === p.team),
-            inShotRange: (Math.hypot(enemyGoal - p.x, (typeof RY !== 'undefined' ? RY : 300) - p.y) < 200),
+            inShotRange: (Math.hypot(enemyGoal - p.x, (typeof RY !== 'undefined' ? RY : 300) - p.y) < 250),
             puckInDefZone: (forwardDir === 1 ? puck.x < safeRX - 60 : puck.x > safeRX + 60),
             puckInOffZone: (forwardDir === 1 ? puck.x > safeRX + 60 : puck.x < safeRX - 60),
             puckInNeuZone: (Math.abs(puck.x - safeRX) <= 60),
@@ -787,11 +871,11 @@ ${getRoot('rootRD')};
             if (!result || typeof result !== "object" || 
                 isNaN(result.tx) || !isFinite(result.tx) || 
                 isNaN(result.ty) || !isFinite(result.ty)) {
-                return { tx: 500, ty: 300, action: "none" }; // Fallback to Center Ice
+                return { tx: p.x, ty: p.y, action: "none" }; // Fallback to Center Ice
             }
             return result;
         } catch (e) {
-            return { tx: 500, ty: 300, action: "none" };
+            return { tx: p.x, ty: p.y, action: "none" };
         }
     }
 

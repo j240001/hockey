@@ -80,17 +80,57 @@ function pointLineDistance(x1, y1, x2, y2, px, py) {
 
 // --- 2. QUERY UTILS (Vision) ---
 
+
+
+
+function canSeeNet(p) {
+    const goalX = (p.team === 0) ? (typeof goal2!=='undefined'?goal2:825) : (typeof goal1!=='undefined'?goal1:175);
+    const goalY = (typeof RY !== 'undefined' ? RY : 300);
+    
+    // 1. DEAD ANGLE CHECK (The Fix)
+    // If we are attacking Right (Goal > 500), we must be to the LEFT of the goal line.
+    // If we are attacking Left (Goal < 500), we must be to the RIGHT of the goal line.
+    // We add a 10px buffer so they don't shoot from zero-angle either.
+    const attackingRight = (goalX > 500);
+    
+    if (attackingRight) {
+        if (p.x > goalX - 10) return false; // Too deep!
+    } else {
+        if (p.x < goalX + 10) return false; // Too deep!
+    }
+
+    // 2. OBSTACLE CHECK
+    for (const o of players) {
+        if (o.team === p.team) continue;
+        if (o.type === "goalie") continue; 
+        const distToShot = pointLineDistance(p.x, p.y, goalX, goalY, o.x, o.y);
+        if (distToShot < 15) return false;
+    }
+    return true;
+}
+
+
 function isLaneBlocked(x1, y1, x2, y2, team) {
     for (const o of players) {
-        // Only opponents block the lane
+        // 1. Skip teammates (You can't block your own team's shot)
         if (o.team === team) continue;
+
+        // 2. SKIP THE GOALIE (The Fix)
+        if (o.type === 'goalie') continue; 
         
+        // 3. Calculate distance from this player to the shot line
         const d = pointLineDistance(x1, y1, x2, y2, o.x, o.y);
-        // 18px is the "width" of the blockage (player radius + buffer)
-        if (d < 18) return true;
+        
+        // 4. Debugging Output
+        // 18px is the "width" of the blockage
+        if (d < 18) {
+            console.log(`⛔ BLOCKED by ${o.role} (Team ${o.team}). Dist: ${d.toFixed(1)}px`);
+            return true;
+        }
     }
     return false;
 }
+
 
 function isPressured(p) {
     for (const o of players) {
@@ -113,49 +153,100 @@ function getPuckCarrier() {
 // --- 3. TACTICAL HELPERS (Calculations) ---
 
 
-function getPositionWithinLimits(p, bb, d) {
-    // Standard rink vertical boundaries used in your other nodes
-    const rinkTop = RY - 170; 
-    const rinkBot = RY + 170;
+
+function getSmartShootTarget(p, bb) {
+    // 1. Where is the goal?
+    const targetX = bb.enemyGoal;
+    const targetY = (typeof RY !== 'undefined' ? RY : 300);
+
+    // 2. Call your NEW function
+    // If we can see the net (ignoring the goalie), then we shoot!
+    if (canSeeNet(p)) {
+        return { tx: targetX, ty: targetY, action: "shoot" };
+    }
     
-    const distToOwn = Math.abs(p.x - bb.myGoalX);
-    const distToOpp = Math.abs(p.x - bb.enemyGoal);
-    const distToTop = Math.abs(p.y - rinkTop);
-    const distToBot = Math.abs(p.y - rinkBot);
+    // 3. If blocked, return null (so the AI passes instead)
+    return null;
+}
+
+
+
+function findLeastGuardedInZone(p, bb) {
+    let bestTeammate = null;
+    let maxSafetyScore = -1;
+
+    for (let m of players) {
+        // Only target teammates who are skaters and not the carrier
+        if (m.team === p.team && m.id !== p.id && m.type === 'skater') {
+            
+            // 1. Ozone Check: Must be in the offensive zone
+            const inOzone = (m.x - 500) * bb.forwardDir > 110; // Past the far blue line
+            if (!inOzone) continue;
+
+            // 2. Lane Check: Is there a clear path?
+            // This also implicitly prevents passing through the net if your isLaneBlocked handles it
+            if (typeof isLaneBlocked === 'function' && isLaneBlocked(p.x, p.y, m.x, m.y, p.team)) {
+                continue;
+            }
+
+            // 3. Pressure Check: Find distance to the closest opponent
+            let minOppDist = 9999;
+            for (let opp of players) {
+                if (opp.team !== p.team) {
+                    const d = Math.hypot(m.x - opp.x, m.y - opp.y);
+                    if (d < minOppDist) minOppDist = d;
+                }
+            }
+
+            // 4. Scoring: Higher distance to opponent = Higher safety
+            if (minOppDist > maxSafetyScore) {
+                maxSafetyScore = minOppDist;
+                bestTeammate = m;
+            }
+        }
+    }
+    return bestTeammate;
+}
+
+
+
+
+
+
+
+
+function getPositionWithinLimits(p, bb, d) {
+    const rinkTop = (typeof RY !== 'undefined' ? RY : 300) - 170; 
+    const rinkBot = (typeof RY !== 'undefined' ? RY : 300) + 170;
+
+    // FIX: Force these to be Numbers
+    const minOwn = Number(d.minDistOwnGoal || 0);
+    const minOpp = Number(d.minDistOppGoal || 0);
+    const minLeft = Number(d.minDistLeftBoard || 0);
+    const minRight = Number(d.minDistRightBoard || 0);
 
     let moveX = p.x;
     let moveY = p.y;
     let needsMove = false;
 
-    // 1. Depth Check (X)
-    if (distToOwn < d.minDistOwnGoal) {
-        moveX = bb.myGoalX + (bb.forwardDir * d.minDistOwnGoal);
+    if (Math.abs(p.x - bb.myGoalX) < minOwn) {
+        moveX = bb.myGoalX + (bb.forwardDir * minOwn);
         needsMove = true;
-    } else if (distToOpp < d.minDistOppGoal) {
-        moveX = bb.enemyGoal - (bb.forwardDir * d.minDistOppGoal);
-        needsMove = true;
-    }
-
-    // 2. Lateral Check (Y)
-    if (distToTop < d.minDistLeftBoard) {
-        moveY = rinkTop + d.minDistLeftBoard;
-        needsMove = true;
-    } else if (distToBot < d.minDistRightBoard) {
-        moveY = rinkBot - d.minDistRightBoard;
+    } else if (Math.abs(p.x - bb.enemyGoal) < minOpp) {
+        moveX = bb.enemyGoal - (bb.forwardDir * minOpp);
         needsMove = true;
     }
 
-    // 3. Satisfaction Trigger
-    if (!needsMove) {
-        // Kill momentum so they stand still and look at puck
-        p.vx *= 0.1;
-        p.vy *= 0.1;
-        return { tx: p.x, ty: p.y, action: "none" };
+    if (Math.abs(p.y - rinkTop) < minLeft) {
+        moveY = rinkTop + minLeft; // Now calculates 280 instead of "130150"
+        needsMove = true;
+    } else if (Math.abs(p.y - rinkBot) < minRight) {
+        moveY = rinkBot - minRight;
+        needsMove = true;
     }
 
     return { tx: moveX, ty: moveY, action: "none" };
 }
-
 
 
 

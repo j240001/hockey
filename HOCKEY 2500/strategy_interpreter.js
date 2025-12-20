@@ -27,7 +27,7 @@ const StrategyInterpreter = {
             else result = trees.C ? trees.C.tick(bb) : null;
 
             if (!result || typeof result === "string" || (typeof result === 'object' && isNaN(result.tx))) {
-                return { tx: p.x || 500, ty: p.y || 300, action: "none" };
+                return { tx: p.x, ty: p.y, action: "none" }; // Target own position
             }
             return result;
         };
@@ -62,6 +62,6 @@ const StrategyInterpreter = {
 
         // 3. PANIC: Node not found
         console.warn(`⚠️ Interpreter: Unknown node '${data.type}'. Is node_registry.js loaded?`);
-        return new ActionNode(() => ({ tx: 500, ty: 300, action: 'none' }));
+        return new ActionNode((bb) => ({ tx: bb.p.x, ty: bb.p.y, action: 'none' }));
     }
 };
