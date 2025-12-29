@@ -6469,30 +6469,28 @@ if (p.type === "skater") {
 
     let stickRotation = 0.8;
 
-    if (hasPuck) {
-        // A. CALCULATE TURN INTENSITY
+if (hasPuck) {
+        // A. SMOOTH TURNING (Your existing smoothing logic)
         if (!('prevAngle' in p)) p.prevAngle = p.angle;
         if (!('smoothedTurn' in p)) p.smoothedTurn = 0;
-
         const rawTurn = Math.abs(normalizeAngle(p.angle - p.prevAngle));
         p.prevAngle = p.angle;
-
-        // B. SMOOTH THE TURN (Low-Pass Filter)
-        // 0.1 is the 'responsiveness'. Lower = smoother/slower, Higher = faster/snappier.
         p.smoothedTurn += (rawTurn - p.smoothedTurn) * 0.1;
 
-        // C. CALCULATE DYNAMIC AMPLITUDE 
-        // We multiply smoothedTurn by a larger number (e.g. 15) to get a visible swing
+        // B. NEW: POSSESSION EASE-IN
+        // This prevents the "snap" when first grabbing the puck.
+        // It takes 20 frames (~0.3s) to reach full stick-handling width.
+        const easeIn = Math.min(1.0, p.possessionTime / 20);
+
+        // C. CALCULATE AMPLITUDE 
         const weaveFactor = p.smoothedTurn * 15;
         const speedFactor = speed * 0.05; 
-        const currentAmp = 0.05 + weaveFactor + speedFactor;
+        // We multiply the whole amplitude by our easeIn factor
+        const currentAmp = (0.05 + weaveFactor + speedFactor) * easeIn;
 
-        // D. ORGANIC WAVE
-        // Frequency is now much calmer.
         const freq = 0.04 + (p.smoothedTurn * 0.2) + (speed * 0.03);
         const organicWave = Math.sin(frameCount * freq + (p.id * 10));
 
-        // E. FINAL ROTATION
         stickRotation = 0.45 - (organicWave * currentAmp);
     }
 
