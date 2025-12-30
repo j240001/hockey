@@ -12,20 +12,136 @@
       "cat": "struct",
       "children": [
         {
+          "type": "actIntelTest",
+          "cat": "act"
+        },
+        {
+          "type": "actCarrierIntel",
+          "cat": "act",
+          "isForward": "1"
+        },
+        {
           "type": "Sequence",
           "cat": "struct",
           "children": [
             {
-              "type": "condIsLastMan",
+              "type": "condHasPuck",
               "cat": "cond"
             },
+            {
+              "type": "condInShotRange",
+              "cat": "cond",
+              "dist": "150"
+            },
+            {
+              "type": "actSmartShoot",
+              "cat": "act",
+              "laneWidth": "10",
+              "angleBuf": "5"
+            }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "condHasBackdoor",
+              "cat": "cond",
+              "dist": "150",
+              "open": "40",
+              "goal": "90"
+            },
+            {
+              "type": "actPassTest",
+              "cat": "act",
+              "minOpenness": "40"
+            }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "condPatienceBreached",
+              "cat": "cond",
+              "dist": "20"
+            },
+            {
+              "type": "actPassTest",
+              "cat": "act",
+              "minOpenness": "30"
+            }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condPuckInDefZone",
+              "cat": "cond"
+            },
+            {
+              "type": "condHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "actLaneCarry",
+              "cat": "act",
+              "forwardDist": "150"
+            }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condPuckInNeuZone",
+              "cat": "cond"
+            },
+            {
+              "type": "condHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "actLaneCarry",
+              "cat": "act",
+              "forwardDist": "150"
+            }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
             {
               "type": "condOppHasPuck",
               "cat": "cond"
             },
             {
-              "type": "actAggressiveGap",
-              "cat": "act"
+              "type": "condPuckInOffZone",
+              "cat": "cond"
+            },
+            {
+              "type": "condAmIClosest",
+              "cat": "cond",
+              "dist": "50"
+            },
+            {
+              "type": "actSmartIntercept",
+              "cat": "act",
+              "minSpeed": "1.5"
             }
           ]
         },
@@ -40,7 +156,7 @@
             {
               "type": "condAmIClosest",
               "cat": "cond",
-              "dist": "0"
+              "dist": "50"
             },
             {
               "type": "actSmartIntercept",
@@ -60,7 +176,7 @@
             {
               "type": "condAmIClosest",
               "cat": "cond",
-              "dist": "0"
+              "dist": "150"
             },
             {
               "type": "actSmartIntercept",
@@ -74,37 +190,20 @@
           "cat": "struct",
           "children": [
             {
-              "type": "condHasPuck",
-              "cat": "cond"
-            },
-            {
-              "type": "condInShotRange",
-              "cat": "cond",
-              "dist": "250"
-            },
-            {
-              "type": "actSmartShoot",
-              "cat": "act",
-              "laneWidth": "15",
-              "angleBuf": "10"
-            }
-          ]
-        },
-        {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
-              "type": "condHasPuck",
-              "cat": "cond"
-            },
-            {
               "type": "condPuckInOffZone",
               "cat": "cond"
             },
             {
-              "type": "actOzoneReliefPass",
-              "cat": "act"
+              "type": "condTeamHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "actGoToPosition",
+              "cat": "act",
+              "minDistOwnGoal": "450",
+              "minDistOppGoal": "50",
+              "minDistLeftBoard": "100",
+              "minDistRightBoard": "100"
             }
           ]
         },
@@ -113,33 +212,20 @@
           "cat": "struct",
           "children": [
             {
-              "type": "condHasPuck",
+              "type": "condPuckInNeuZone",
               "cat": "cond"
             },
             {
-              "type": "condWeightedPassCheck",
-              "cat": "cond",
-              "bias": "50",
-              "fear": "50",
-              "vision": "50"
-            },
-            {
-              "type": "actSmartPass",
-              "cat": "act"
-            }
-          ]
-        },
-        {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
-              "type": "condHasPuck",
+              "type": "condTeamHasPuck",
               "cat": "cond"
             },
             {
-              "type": "actExecuteCarry",
-              "cat": "act"
+              "type": "actGoToPosition",
+              "cat": "act",
+              "minDistOwnGoal": "350",
+              "minDistOppGoal": "250",
+              "minDistLeftBoard": "150",
+              "minDistRightBoard": "150"
             }
           ]
         },
@@ -155,8 +241,8 @@
             {
               "type": "actGoToPosition",
               "cat": "act",
-              "minDistOwnGoal": "60",
-              "minDistOppGoal": "400",
+              "minDistOwnGoal": "150",
+              "minDistOppGoal": "440",
               "minDistLeftBoard": "150",
               "minDistRightBoard": "150"
             }
@@ -174,8 +260,8 @@
             {
               "type": "actGoToPosition",
               "cat": "act",
-              "minDistOwnGoal": "180",
-              "minDistOppGoal": "300",
+              "minDistOwnGoal": "200",
+              "minDistOppGoal": "390",
               "minDistLeftBoard": "150",
               "minDistRightBoard": "150"
             }
@@ -193,10 +279,10 @@
             {
               "type": "actGoToPosition",
               "cat": "act",
-              "minDistOwnGoal": "200",
-              "minDistOppGoal": "325",
-              "minDistLeftBoard": "200",
-              "minDistRightBoard": "0"
+              "minDistOwnGoal": "250",
+              "minDistOppGoal": "340",
+              "minDistLeftBoard": "150",
+              "minDistRightBoard": "150"
             }
           ]
         },
@@ -213,9 +299,9 @@
               "type": "actGoToPosition",
               "cat": "act",
               "minDistOwnGoal": "300",
-              "minDistOppGoal": "325",
-              "minDistLeftBoard": "200",
-              "minDistRightBoard": "0"
+              "minDistOppGoal": "450",
+              "minDistLeftBoard": "150",
+              "minDistRightBoard": "150"
             }
           ]
         },
@@ -231,10 +317,10 @@
             {
               "type": "actGoToPosition",
               "cat": "act",
-              "minDistOwnGoal": "550",
+              "minDistOwnGoal": "440",
               "minDistOppGoal": "0",
-              "minDistLeftBoard": "200",
-              "minDistRightBoard": "0"
+              "minDistLeftBoard": "50",
+              "minDistRightBoard": "50"
             }
           ]
         },
@@ -250,10 +336,10 @@
             {
               "type": "actGoToPosition",
               "cat": "act",
-              "minDistOwnGoal": "550",
+              "minDistOwnGoal": "440",
               "minDistOppGoal": "0",
-              "minDistLeftBoard": "200",
-              "minDistRightBoard": "0"
+              "minDistLeftBoard": "50",
+              "minDistRightBoard": "50"
             }
           ]
         }
@@ -266,11 +352,87 @@
       "cat": "struct",
       "children": [
         {
+          "type": "actIntelTest",
+          "cat": "act"
+        },
+        {
+          "type": "actCarrierIntel",
+          "cat": "act",
+          "isForward": "1"
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "condInShotRange",
+              "cat": "cond",
+              "dist": "150"
+            },
+            {
+              "type": "actSmartShoot",
+              "cat": "act",
+              "laneWidth": "15",
+              "angleBuf": "10"
+            }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "condHasBackdoor",
+              "cat": "cond",
+              "dist": "150",
+              "open": "40",
+              "goal": "90"
+            },
+            {
+              "type": "actPassTest",
+              "cat": "act",
+              "minOpenness": "40"
+            }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condLoosePuck",
+              "cat": "cond"
+            },
+            {
+              "type": "condAmIClosest",
+              "cat": "cond",
+              "dist": "200"
+            },
+            {
+              "type": "actSmartIntercept",
+              "cat": "act",
+              "minSpeed": "1.5"
+            }
+          ]
+        },
+        {
           "type": "Sequence",
           "cat": "struct",
           "children": [
             {
               "type": "condOppHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "condIsLastMan",
               "cat": "cond"
             },
             {
@@ -290,12 +452,84 @@
             {
               "type": "condAmIClosest",
               "cat": "cond",
-              "dist": "0"
+              "dist": "60"
             },
             {
               "type": "actSmartIntercept",
               "cat": "act",
               "minSpeed": "1.5"
+            }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "condPatienceBreached",
+              "cat": "cond",
+              "dist": "20"
+            },
+            {
+              "type": "actPassTest",
+              "cat": "act",
+              "minOpenness": "30"
+            }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condPuckInDefZone",
+              "cat": "cond"
+            },
+            {
+              "type": "condHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "actLaneCarry",
+              "cat": "act",
+              "forwardDist": "150"
+            }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condPuckInNeuZone",
+              "cat": "cond"
+            },
+            {
+              "type": "condHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "actLaneCarry",
+              "cat": "act",
+              "forwardDist": "150"
+            }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "actDriveNet",
+              "cat": "act"
             }
           ]
         },
@@ -308,35 +542,16 @@
               "cat": "cond"
             },
             {
-              "type": "condAmIClosest",
-              "cat": "cond",
-              "dist": "0"
-            },
-            {
-              "type": "actSmartIntercept",
-              "cat": "act",
-              "minSpeed": "1.5"
-            }
-          ]
-        },
-        {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
-              "type": "condHasPuck",
+              "type": "condPuckInOffZone",
               "cat": "cond"
             },
             {
-              "type": "condInShotRange",
-              "cat": "cond",
-              "dist": "250"
-            },
-            {
-              "type": "actSmartShoot",
+              "type": "actGoToPosition",
               "cat": "act",
-              "laneWidth": "15",
-              "angleBuf": "10"
+              "minDistOwnGoal": "525",
+              "minDistOppGoal": "50",
+              "minDistLeftBoard": "100",
+              "minDistRightBoard": "180"
             }
           ]
         },
@@ -345,7 +560,7 @@
           "cat": "struct",
           "children": [
             {
-              "type": "condHasPuck",
+              "type": "condTeamHasPuck",
               "cat": "cond"
             },
             {
@@ -353,8 +568,12 @@
               "cat": "cond"
             },
             {
-              "type": "actOzoneReliefPass",
-              "cat": "act"
+              "type": "actGoToPosition",
+              "cat": "act",
+              "minDistOwnGoal": "525",
+              "minDistOppGoal": "50",
+              "minDistLeftBoard": "100",
+              "minDistRightBoard": "180"
             }
           ]
         },
@@ -363,52 +582,20 @@
           "cat": "struct",
           "children": [
             {
-              "type": "condHasPuck",
+              "type": "condPuckInNeuZone",
               "cat": "cond"
             },
             {
-              "type": "condHasBreakoutPass",
-              "cat": "cond",
-              "safety": "60",
-              "fwd": "150",
-              "back": "10"
-            },
-            {
-              "type": "actExecutePass",
-              "cat": "act"
-            }
-          ]
-        },
-        {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
-              "type": "condHasPuck",
+              "type": "condTeamHasPuck",
               "cat": "cond"
-            },
-            {
-              "type": "actExecuteCarry",
-              "cat": "act"
-            }
-          ]
-        },
-        {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
-              "type": "condPuckInZone",
-              "cat": "cond",
-              "zoneindex": "1"
             },
             {
               "type": "actGoToPosition",
               "cat": "act",
-              "minDistOwnGoal": "30",
-              "minDistOppGoal": "500",
-              "minDistLeftBoard": "220",
-              "minDistRightBoard": "0"
+              "minDistOwnGoal": "350",
+              "minDistOppGoal": "250",
+              "minDistLeftBoard": "50",
+              "minDistRightBoard": "200"
             }
           ]
         },
@@ -417,93 +604,16 @@
           "cat": "struct",
           "children": [
             {
-              "type": "condPuckInZone",
-              "cat": "cond",
-              "zoneindex": "2"
-            },
-            {
-              "type": "actGoToPosition",
-              "cat": "act",
-              "minDistOwnGoal": "40",
-              "minDistOppGoal": "500",
-              "minDistLeftBoard": "220",
-              "minDistRightBoard": "0"
-            }
-          ]
-        },
-        {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
-              "type": "condPuckInZone",
-              "cat": "cond",
-              "zoneindex": "3"
+              "type": "condPuckInDefZone",
+              "cat": "cond"
             },
             {
               "type": "actGoToPosition",
               "cat": "act",
               "minDistOwnGoal": "100",
-              "minDistOppGoal": "325",
-              "minDistLeftBoard": "220",
-              "minDistRightBoard": "0"
-            }
-          ]
-        },
-        {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
-              "type": "condPuckInZone",
-              "cat": "cond",
-              "zoneindex": "4"
-            },
-            {
-              "type": "actGoToPosition",
-              "cat": "act",
-              "minDistOwnGoal": "200",
-              "minDistOppGoal": "325",
-              "minDistLeftBoard": "220",
-              "minDistRightBoard": "0"
-            }
-          ]
-        },
-        {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
-              "type": "condPuckInZone",
-              "cat": "cond",
-              "zoneindex": "5"
-            },
-            {
-              "type": "actGoToPosition",
-              "cat": "act",
-              "minDistOwnGoal": "550",
-              "minDistOppGoal": "0",
-              "minDistLeftBoard": "220",
-              "minDistRightBoard": "0"
-            }
-          ]
-        },
-        {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
-              "type": "condPuckInZone",
-              "cat": "cond",
-              "zoneindex": "6"
-            },
-            {
-              "type": "actGoToPosition",
-              "cat": "act",
-              "minDistOwnGoal": "550",
-              "minDistOppGoal": "0",
-              "minDistLeftBoard": "220",
-              "minDistRightBoard": "0"
+              "minDistOppGoal": "500",
+              "minDistLeftBoard": "50",
+              "minDistRightBoard": "200"
             }
           ]
         }
@@ -516,58 +626,13 @@
       "cat": "struct",
       "children": [
         {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
-              "type": "condOppHasPuck",
-              "cat": "cond"
-            },
-            {
-              "type": "actAggressiveGap",
-              "cat": "act"
-            }
-          ]
+          "type": "actIntelTest",
+          "cat": "act"
         },
         {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
-              "type": "condOppHasPuck",
-              "cat": "cond"
-            },
-            {
-              "type": "condAmIClosest",
-              "cat": "cond",
-              "dist": "0"
-            },
-            {
-              "type": "actSmartIntercept",
-              "cat": "act",
-              "minSpeed": "1.5"
-            }
-          ]
-        },
-        {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
-              "type": "condLoosePuck",
-              "cat": "cond"
-            },
-            {
-              "type": "condAmIClosest",
-              "cat": "cond",
-              "dist": "0"
-            },
-            {
-              "type": "actSmartIntercept",
-              "cat": "act",
-              "minSpeed": "1.5"
-            }
-          ]
+          "type": "actCarrierIntel",
+          "cat": "act",
+          "isForward": "1"
         },
         {
           "type": "Sequence",
@@ -580,7 +645,7 @@
             {
               "type": "condInShotRange",
               "cat": "cond",
-              "dist": "250"
+              "dist": "200"
             },
             {
               "type": "actSmartShoot",
@@ -599,11 +664,33 @@
               "cat": "cond"
             },
             {
+              "type": "condHasBackdoor",
+              "cat": "cond",
+              "dist": "150",
+              "open": "40",
+              "goal": "90"
+            },
+            {
+              "type": "actPassTest",
+              "cat": "act",
+              "minOpenness": "40"
+            }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condHasPuck",
+              "cat": "cond"
+            },
+            {
               "type": "condPuckInOffZone",
               "cat": "cond"
             },
             {
-              "type": "actOzoneReliefPass",
+              "type": "actDriveNet",
               "cat": "act"
             }
           ]
@@ -617,15 +704,14 @@
               "cat": "cond"
             },
             {
-              "type": "condHasBreakoutPass",
+              "type": "condPatienceBreached",
               "cat": "cond",
-              "safety": "60",
-              "fwd": "150",
-              "back": "10"
+              "dist": "20"
             },
             {
-              "type": "actExecutePass",
-              "cat": "act"
+              "type": "actPassTest",
+              "cat": "act",
+              "minOpenness": "30"
             }
           ]
         },
@@ -638,8 +724,13 @@
               "cat": "cond"
             },
             {
-              "type": "actExecuteCarry",
-              "cat": "act"
+              "type": "condPuckInDefZone",
+              "cat": "cond"
+            },
+            {
+              "type": "actLaneCarry",
+              "cat": "act",
+              "forwardDist": "80"
             }
           ]
         },
@@ -648,17 +739,17 @@
           "cat": "struct",
           "children": [
             {
-              "type": "condPuckInZone",
-              "cat": "cond",
-              "zoneindex": "1"
+              "type": "condHasPuck",
+              "cat": "cond"
             },
             {
-              "type": "actGoToPosition",
+              "type": "condPuckInNeuZone",
+              "cat": "cond"
+            },
+            {
+              "type": "actLaneCarry",
               "cat": "act",
-              "minDistOwnGoal": "30",
-              "minDistOppGoal": "500",
-              "minDistLeftBoard": "0",
-              "minDistRightBoard": "220"
+              "forwardDist": "80"
             }
           ]
         },
@@ -667,17 +758,18 @@
           "cat": "struct",
           "children": [
             {
-              "type": "condPuckInZone",
-              "cat": "cond",
-              "zoneindex": "2"
+              "type": "condLoosePuck",
+              "cat": "cond"
             },
             {
-              "type": "actGoToPosition",
+              "type": "condAmIClosest",
+              "cat": "cond",
+              "dist": "80"
+            },
+            {
+              "type": "actSmartIntercept",
               "cat": "act",
-              "minDistOwnGoal": "40",
-              "minDistOppGoal": "500",
-              "minDistLeftBoard": "0",
-              "minDistRightBoard": "220"
+              "minSpeed": "1.5"
             }
           ]
         },
@@ -686,17 +778,18 @@
           "cat": "struct",
           "children": [
             {
-              "type": "condPuckInZone",
-              "cat": "cond",
-              "zoneindex": "3"
+              "type": "condOppHasPuck",
+              "cat": "cond"
             },
             {
-              "type": "actGoToPosition",
+              "type": "condAmIClosest",
+              "cat": "cond",
+              "dist": "80"
+            },
+            {
+              "type": "actSmartIntercept",
               "cat": "act",
-              "minDistOwnGoal": "100",
-              "minDistOppGoal": "325",
-              "minDistLeftBoard": "0",
-              "minDistRightBoard": "220"
+              "minSpeed": "1.5"
             }
           ]
         },
@@ -705,17 +798,16 @@
           "cat": "struct",
           "children": [
             {
-              "type": "condPuckInZone",
-              "cat": "cond",
-              "zoneindex": "4"
+              "type": "condPuckInDefZone",
+              "cat": "cond"
             },
             {
               "type": "actGoToPosition",
               "cat": "act",
-              "minDistOwnGoal": "200",
-              "minDistOppGoal": "325",
-              "minDistLeftBoard": "0",
-              "minDistRightBoard": "220"
+              "minDistOwnGoal": "150",
+              "minDistOppGoal": "400",
+              "minDistLeftBoard": "200",
+              "minDistRightBoard": "50"
             }
           ]
         },
@@ -724,36 +816,34 @@
           "cat": "struct",
           "children": [
             {
-              "type": "condPuckInZone",
-              "cat": "cond",
-              "zoneindex": "5"
+              "type": "condPuckInNeuZone",
+              "cat": "cond"
             },
             {
               "type": "actGoToPosition",
               "cat": "act",
-              "minDistOwnGoal": "550",
+              "minDistOwnGoal": "300",
+              "minDistOppGoal": "250",
+              "minDistLeftBoard": "200",
+              "minDistRightBoard": "50"
+            }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condPuckInOffZone",
+              "cat": "cond"
+            },
+            {
+              "type": "actGoToPosition",
+              "cat": "act",
+              "minDistOwnGoal": "500",
               "minDistOppGoal": "0",
-              "minDistLeftBoard": "0",
-              "minDistRightBoard": "220"
-            }
-          ]
-        },
-        {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
-              "type": "condPuckInZone",
-              "cat": "cond",
-              "zoneindex": "6"
-            },
-            {
-              "type": "actGoToPosition",
-              "cat": "act",
-              "minDistOwnGoal": "550",
-              "minDistOppGoal": "0",
-              "minDistLeftBoard": "0",
-              "minDistRightBoard": "220"
+              "minDistLeftBoard": "200",
+              "minDistRightBoard": "50"
             }
           ]
         }
@@ -770,11 +860,51 @@
           "cat": "struct",
           "children": [
             {
-              "type": "condPuckInDefZone",
+              "type": "condLoosePuck",
               "cat": "cond"
             },
             {
+              "type": "condAmIClosest",
+              "cat": "cond",
+              "dist": "100"
+            },
+            {
+              "type": "actSmartIntercept",
+              "cat": "act",
+              "minSpeed": "1.5"
+            }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
               "type": "condOppHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "condAmIClosest",
+              "cat": "cond",
+              "dist": "60"
+            },
+            {
+              "type": "actSmartIntercept",
+              "cat": "act",
+              "minSpeed": "1.5"
+            }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condOppHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "condIsLastMan",
               "cat": "cond"
             },
             {
@@ -784,48 +914,13 @@
           ]
         },
         {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
-              "type": "condPuckInDefZone",
-              "cat": "cond"
-            },
-            {
-              "type": "condOppHasPuck",
-              "cat": "cond"
-            },
-            {
-              "type": "condAmIClosest",
-              "cat": "cond",
-              "dist": "0"
-            },
-            {
-              "type": "actSmartIntercept",
-              "cat": "act",
-              "minSpeed": "1.5"
-            }
-          ]
+          "type": "actIntelTest",
+          "cat": "act"
         },
         {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
-              "type": "condLoosePuck",
-              "cat": "cond"
-            },
-            {
-              "type": "condAmIClosest",
-              "cat": "cond",
-              "dist": "0"
-            },
-            {
-              "type": "actSmartIntercept",
-              "cat": "act",
-              "minSpeed": "1.5"
-            }
-          ]
+          "type": "actCarrierIntel",
+          "cat": "act",
+          "isForward": "0"
         },
         {
           "type": "Sequence",
@@ -838,7 +933,7 @@
             {
               "type": "condInShotRange",
               "cat": "cond",
-              "dist": "250"
+              "dist": "325"
             },
             {
               "type": "actSmartShoot",
@@ -857,33 +952,14 @@
               "cat": "cond"
             },
             {
-              "type": "condPuckInOffZone",
-              "cat": "cond"
-            },
-            {
-              "type": "actOzoneReliefPass",
-              "cat": "act"
-            }
-          ]
-        },
-        {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
-              "type": "condHasPuck",
-              "cat": "cond"
-            },
-            {
-              "type": "condHasBreakoutPass",
+              "type": "condPatienceBreached",
               "cat": "cond",
-              "safety": "60",
-              "fwd": "150",
-              "back": "10"
+              "dist": "20"
             },
             {
-              "type": "actExecutePass",
-              "cat": "act"
+              "type": "actPassTest",
+              "cat": "act",
+              "minOpenness": "30"
             }
           ]
         },
@@ -892,12 +968,21 @@
           "cat": "struct",
           "children": [
             {
+              "type": "condPuckInDefZone",
+              "cat": "cond"
+            },
+            {
               "type": "condHasPuck",
               "cat": "cond"
             },
             {
-              "type": "actExecuteCarry",
-              "cat": "act"
+              "type": "condForwardLaneClear",
+              "cat": "cond"
+            },
+            {
+              "type": "actLaneCarry",
+              "cat": "act",
+              "forwardDist": "150"
             }
           ]
         },
@@ -908,14 +993,73 @@
             {
               "type": "condPuckInZone",
               "cat": "cond",
-              "zoneindex": "1"
+              "zoneindex": "3"
+            },
+            {
+              "type": "condHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "actLaneCarry",
+              "cat": "act",
+              "forwardDist": "150"
+            }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "actDriveNet",
+              "cat": "act"
+            }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condLoosePuck",
+              "cat": "cond"
+            },
+            {
+              "type": "condPuckInNeuZone",
+              "cat": "cond"
             },
             {
               "type": "actGoToPosition",
               "cat": "act",
-              "minDistOwnGoal": "30",
+              "minDistOwnGoal": "60",
+              "minDistOppGoal": "450",
+              "minDistLeftBoard": "100",
+              "minDistRightBoard": "150"
+            }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condLoosePuck",
+              "cat": "cond"
+            },
+            {
+              "type": "condPuckInDefZone",
+              "cat": "cond"
+            },
+            {
+              "type": "actGoToPosition",
+              "cat": "act",
+              "minDistOwnGoal": "20",
               "minDistOppGoal": "600",
-              "minDistLeftBoard": "160",
+              "minDistLeftBoard": "100",
               "minDistRightBoard": "160"
             }
           ]
@@ -925,128 +1069,20 @@
           "cat": "struct",
           "children": [
             {
-              "type": "condPuckInZone",
-              "cat": "cond",
-              "zoneindex": "2"
+              "type": "condPuckInOffZone",
+              "cat": "cond"
             },
-            {
-              "type": "actGoToPosition",
-              "cat": "act",
-              "minDistOwnGoal": "40",
-              "minDistOppGoal": "500",
-              "minDistLeftBoard": "220",
-              "minDistRightBoard": "0"
-            }
-          ]
-        },
-        {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
             {
               "type": "condOppHasPuck",
               "cat": "cond"
             },
             {
-              "type": "condPuckInZone",
-              "cat": "cond",
-              "zoneindex": "3"
-            },
-            {
               "type": "actGoToPosition",
               "cat": "act",
-              "minDistOwnGoal": "30",
-              "minDistOppGoal": "550",
-              "minDistLeftBoard": "140",
-              "minDistRightBoard": "0"
-            }
-          ]
-        },
-        {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
-              "type": "condOppHasPuck",
-              "cat": "cond"
-            },
-            {
-              "type": "condPuckInZone",
-              "cat": "cond",
-              "zoneindex": "4"
-            },
-            {
-              "type": "actGoToPosition",
-              "cat": "act",
-              "minDistOwnGoal": "30",
-              "minDistOppGoal": "550",
-              "minDistLeftBoard": "160",
-              "minDistRightBoard": "0"
-            }
-          ]
-        },
-        {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
-              "type": "condOppHasPuck",
-              "cat": "cond"
-            },
-            {
-              "type": "condPuckInZone",
-              "cat": "cond",
-              "zoneindex": "5"
-            },
-            {
-              "type": "actGoToPosition",
-              "cat": "act",
-              "minDistOwnGoal": "0",
-              "minDistOppGoal": "425",
-              "minDistLeftBoard": "150",
-              "minDistRightBoard": "0"
-            }
-          ]
-        },
-        {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
-              "type": "condOppHasPuck",
-              "cat": "cond"
-            },
-            {
-              "type": "condPuckInZone",
-              "cat": "cond",
-              "zoneindex": "6"
-            },
-            {
-              "type": "actGoToPosition",
-              "cat": "act",
-              "minDistOwnGoal": "0",
-              "minDistOppGoal": "325",
-              "minDistLeftBoard": "150",
-              "minDistRightBoard": "0"
-            }
-          ]
-        },
-        {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
-              "type": "condPuckInZone",
-              "cat": "cond",
-              "zoneindex": "5"
-            },
-            {
-              "type": "actGoToPosition",
-              "cat": "act",
-              "minDistOwnGoal": "180",
-              "minDistOppGoal": "180",
+              "minDistOwnGoal": "200",
+              "minDistOppGoal": "400",
               "minDistLeftBoard": "100",
-              "minDistRightBoard": "0"
+              "minDistRightBoard": "200"
             }
           ]
         },
@@ -1055,55 +1091,82 @@
           "cat": "struct",
           "children": [
             {
-              "type": "condPuckInZone",
-              "cat": "cond",
-              "zoneindex": "6"
+              "type": "condOppHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "condPuckInNeuZone",
+              "cat": "cond"
+            },
+            {
+              "type": "actAggressiveGap",
+              "cat": "act"
+            }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condTeamHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "condPuckInDefZone",
+              "cat": "cond"
+            },
+            {
+              "type": "actGoToPosition",
+              "cat": "act",
+              "minDistOwnGoal": "50",
+              "minDistOppGoal": "550",
+              "minDistLeftBoard": "100",
+              "minDistRightBoard": "150"
+            }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condTeamHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "condPuckInNeuZone",
+              "cat": "cond"
+            },
+            {
+              "type": "actGoToPosition",
+              "cat": "act",
+              "minDistOwnGoal": "50",
+              "minDistOppGoal": "550",
+              "minDistLeftBoard": "100",
+              "minDistRightBoard": "150"
+            }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condTeamHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "condPuckInOffZone",
+              "cat": "cond"
             },
             {
               "type": "actGoToPosition",
               "cat": "act",
               "minDistOwnGoal": "440",
-              "minDistOppGoal": "180",
-              "minDistLeftBoard": "100",
-              "minDistRightBoard": "0"
-            }
-          ]
-        },
-        {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
-              "type": "condPuckInZone",
-              "cat": "cond",
-              "zoneindex": "4"
-            },
-            {
-              "type": "actGoToPosition",
-              "cat": "act",
-              "minDistOwnGoal": "0",
-              "minDistOppGoal": "450",
-              "minDistLeftBoard": "160",
-              "minDistRightBoard": "0"
-            }
-          ]
-        },
-        {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
-              "type": "condPuckInZone",
-              "cat": "cond",
-              "zoneindex": "3"
-            },
-            {
-              "type": "actGoToPosition",
-              "cat": "act",
-              "minDistOwnGoal": "60",
-              "minDistOppGoal": "500",
-              "minDistLeftBoard": "140",
-              "minDistRightBoard": "0"
+              "minDistOppGoal": "160",
+              "minDistLeftBoard": "0",
+              "minDistRightBoard": "200"
             }
           ]
         }
@@ -1120,60 +1183,100 @@
           "cat": "struct",
           "children": [
             {
-              "type": "condPuckInDefZone",
-              "cat": "cond"
-            },
-            {
-              "type": "condOppHasPuck",
-              "cat": "cond"
-            },
-            {
-              "type": "actAggressiveGap",
-              "cat": "act"
-            }
-          ]
-        },
-        {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
-              "type": "condPuckInDefZone",
-              "cat": "cond"
-            },
-            {
-              "type": "condOppHasPuck",
-              "cat": "cond"
-            },
-            {
-              "type": "condAmIClosest",
-              "cat": "cond",
-              "dist": "0"
-            },
-            {
-              "type": "actSmartIntercept",
-              "cat": "act",
-              "minSpeed": "1.5"
-            }
-          ]
-        },
-        {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
               "type": "condLoosePuck",
               "cat": "cond"
             },
             {
               "type": "condAmIClosest",
               "cat": "cond",
-              "dist": "0"
+              "dist": "100"
             },
             {
               "type": "actSmartIntercept",
               "cat": "act",
               "minSpeed": "1.5"
+            }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condOppHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "condPuckInOffZone",
+              "cat": "cond"
+            },
+            {
+              "type": "actGoToPosition",
+              "cat": "act",
+              "minDistOwnGoal": "50",
+              "minDistOppGoal": "500",
+              "minDistLeftBoard": "100",
+              "minDistRightBoard": "100"
+            }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condOppHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "condPuckInNeuZone",
+              "cat": "cond"
+            },
+            {
+              "type": "actGoToPosition",
+              "cat": "act",
+              "minDistOwnGoal": "50",
+              "minDistOppGoal": "500",
+              "minDistLeftBoard": "100",
+              "minDistRightBoard": "100"
+            }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condOppHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "condAmIClosest",
+              "cat": "cond",
+              "dist": "60"
+            },
+            {
+              "type": "actSmartIntercept",
+              "cat": "act",
+              "minSpeed": "1.5"
+            }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condOppHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "condPuckInDefZone",
+              "cat": "cond"
+            },
+            {
+              "type": "actAggressiveGap",
+              "cat": "act"
             }
           ]
         },
@@ -1188,7 +1291,7 @@
             {
               "type": "condInShotRange",
               "cat": "cond",
-              "dist": "250"
+              "dist": "325"
             },
             {
               "type": "actSmartShoot",
@@ -1199,11 +1302,221 @@
           ]
         },
         {
+          "type": "actCarrierIntel",
+          "cat": "act",
+          "isForward": "0"
+        },
+        {
+          "type": "actIntelTest",
+          "cat": "act"
+        },
+        {
           "type": "Sequence",
           "cat": "struct",
           "children": [
             {
               "type": "condHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "condPatienceBreached",
+              "cat": "cond",
+              "dist": "20"
+            },
+            {
+              "type": "actPassTest",
+              "cat": "act",
+              "minOpenness": "30"
+            }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condPuckInDefZone",
+              "cat": "cond"
+            },
+            {
+              "type": "condHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "actLaneCarry",
+              "cat": "act",
+              "forwardDist": "150"
+            }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condPuckInZone",
+              "cat": "cond",
+              "zoneindex": "3"
+            },
+            {
+              "type": "condHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "actLaneCarry",
+              "cat": "act",
+              "forwardDist": "150"
+            }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "actDriveNet",
+              "cat": "act"
+            }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condLoosePuck",
+              "cat": "cond"
+            },
+            {
+              "type": "condPuckInNeuZone",
+              "cat": "cond"
+            },
+            {
+              "type": "actGoToPosition",
+              "cat": "act",
+              "minDistOwnGoal": "0",
+              "minDistOppGoal": "500",
+              "minDistLeftBoard": "150",
+              "minDistRightBoard": "100"
+            }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condLoosePuck",
+              "cat": "cond"
+            },
+            {
+              "type": "condPuckInDefZone",
+              "cat": "cond"
+            },
+            {
+              "type": "actGoToPosition",
+              "cat": "act",
+              "minDistOwnGoal": "20",
+              "minDistOppGoal": "600",
+              "minDistLeftBoard": "160",
+              "minDistRightBoard": "100"
+            }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condPuckInOffZone",
+              "cat": "cond"
+            },
+            {
+              "type": "condOppHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "actGoToPosition",
+              "cat": "act",
+              "minDistOwnGoal": "200",
+              "minDistOppGoal": "400",
+              "minDistLeftBoard": "200",
+              "minDistRightBoard": "100"
+            }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condOppHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "condPuckInNeuZone",
+              "cat": "cond"
+            },
+            {
+              "type": "actAggressiveGap",
+              "cat": "act"
+            }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condTeamHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "condPuckInDefZone",
+              "cat": "cond"
+            },
+            {
+              "type": "actGoToPosition",
+              "cat": "act",
+              "minDistOwnGoal": "50",
+              "minDistOppGoal": "550",
+              "minDistLeftBoard": "150",
+              "minDistRightBoard": "100"
+            }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condTeamHasPuck",
+              "cat": "cond"
+            },
+            {
+              "type": "condPuckInNeuZone",
+              "cat": "cond"
+            },
+            {
+              "type": "actGoToPosition",
+              "cat": "act",
+              "minDistOwnGoal": "50",
+              "minDistOppGoal": "550",
+              "minDistLeftBoard": "150",
+              "minDistRightBoard": "100"
+            }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            {
+              "type": "condTeamHasPuck",
               "cat": "cond"
             },
             {
@@ -1211,249 +1524,12 @@
               "cat": "cond"
             },
             {
-              "type": "actOzoneReliefPass",
-              "cat": "act"
-            }
-          ]
-        },
-        {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
-              "type": "condHasPuck",
-              "cat": "cond"
-            },
-            {
-              "type": "condHasBreakoutPass",
-              "cat": "cond",
-              "safety": "60",
-              "fwd": "150",
-              "back": "10"
-            },
-            {
-              "type": "actExecutePass",
-              "cat": "act"
-            }
-          ]
-        },
-        {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
-              "type": "condHasPuck",
-              "cat": "cond"
-            },
-            {
-              "type": "actExecuteCarry",
-              "cat": "act"
-            }
-          ]
-        },
-        {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
-              "type": "condPuckInZone",
-              "cat": "cond",
-              "zoneindex": "1"
-            },
-            {
-              "type": "actGoToPosition",
-              "cat": "act",
-              "minDistOwnGoal": "30",
-              "minDistOppGoal": "600",
-              "minDistLeftBoard": "160",
-              "minDistRightBoard": "160"
-            }
-          ]
-        },
-        {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
-              "type": "condPuckInZone",
-              "cat": "cond",
-              "zoneindex": "2"
-            },
-            {
-              "type": "actGoToPosition",
-              "cat": "act",
-              "minDistOwnGoal": "40",
-              "minDistOppGoal": "500",
-              "minDistLeftBoard": "0",
-              "minDistRightBoard": "220"
-            }
-          ]
-        },
-        {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
-              "type": "condOppHasPuck",
-              "cat": "cond"
-            },
-            {
-              "type": "condPuckInZone",
-              "cat": "cond",
-              "zoneindex": "3"
-            },
-            {
-              "type": "actGoToPosition",
-              "cat": "act",
-              "minDistOwnGoal": "30",
-              "minDistOppGoal": "550",
-              "minDistLeftBoard": "0",
-              "minDistRightBoard": "140"
-            }
-          ]
-        },
-        {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
-              "type": "condOppHasPuck",
-              "cat": "cond"
-            },
-            {
-              "type": "condPuckInZone",
-              "cat": "cond",
-              "zoneindex": "4"
-            },
-            {
-              "type": "actGoToPosition",
-              "cat": "act",
-              "minDistOwnGoal": "30",
-              "minDistOppGoal": "550",
-              "minDistLeftBoard": "0",
-              "minDistRightBoard": "160"
-            }
-          ]
-        },
-        {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
-              "type": "condOppHasPuck",
-              "cat": "cond"
-            },
-            {
-              "type": "condPuckInZone",
-              "cat": "cond",
-              "zoneindex": "5"
-            },
-            {
-              "type": "actGoToPosition",
-              "cat": "act",
-              "minDistOwnGoal": "0",
-              "minDistOppGoal": "425",
-              "minDistLeftBoard": "0",
-              "minDistRightBoard": "150"
-            }
-          ]
-        },
-        {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
-              "type": "condOppHasPuck",
-              "cat": "cond"
-            },
-            {
-              "type": "condPuckInZone",
-              "cat": "cond",
-              "zoneindex": "6"
-            },
-            {
-              "type": "actGoToPosition",
-              "cat": "act",
-              "minDistOwnGoal": "0",
-              "minDistOppGoal": "325",
-              "minDistLeftBoard": "0",
-              "minDistRightBoard": "150"
-            }
-          ]
-        },
-        {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
-              "type": "condPuckInZone",
-              "cat": "cond",
-              "zoneindex": "5"
-            },
-            {
-              "type": "actGoToPosition",
-              "cat": "act",
-              "minDistOwnGoal": "180",
-              "minDistOppGoal": "180",
-              "minDistLeftBoard": "0",
-              "minDistRightBoard": "100"
-            }
-          ]
-        },
-        {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
-              "type": "condPuckInZone",
-              "cat": "cond",
-              "zoneindex": "6"
-            },
-            {
               "type": "actGoToPosition",
               "cat": "act",
               "minDistOwnGoal": "440",
-              "minDistOppGoal": "180",
-              "minDistLeftBoard": "0",
-              "minDistRightBoard": "100"
-            }
-          ]
-        },
-        {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
-              "type": "condPuckInZone",
-              "cat": "cond",
-              "zoneindex": "4"
-            },
-            {
-              "type": "actGoToPosition",
-              "cat": "act",
-              "minDistOwnGoal": "0",
-              "minDistOppGoal": "450",
-              "minDistLeftBoard": "0",
-              "minDistRightBoard": "160"
-            }
-          ]
-        },
-        {
-          "type": "Sequence",
-          "cat": "struct",
-          "children": [
-            {
-              "type": "condPuckInZone",
-              "cat": "cond",
-              "zoneindex": "3"
-            },
-            {
-              "type": "actGoToPosition",
-              "cat": "act",
-              "minDistOwnGoal": "60",
-              "minDistOppGoal": "500",
-              "minDistLeftBoard": "0",
-              "minDistRightBoard": "140"
+              "minDistOppGoal": "160",
+              "minDistLeftBoard": "200",
+              "minDistRightBoard": "0"
             }
           ]
         }
