@@ -14,7 +14,7 @@ const Tournament = {
     
     // --- CONFIGURATION ---
     watchMode: false,    
-    speedMult: 50,     
+    speedMult: 325,     
     autoWatchTarget: false, // <--- SET THIS TO FALSE TO STOP THE "W" TOGGLE
     targetTeam: "EDM",     // <--- You can easily change your focus team here
 
