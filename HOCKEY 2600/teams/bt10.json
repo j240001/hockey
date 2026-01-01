@@ -1,0 +1,673 @@
+{
+  "name": "Florida",
+  "teamName": "Panthers",
+  "code": "FLA",
+  "colors": {
+    "main": "#C8102E",
+    "secondary": "#041E42"
+ },
+  "c": [
+    {
+      "type": "Selector",
+      "cat": "struct",
+      "children": [
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condIsLastMan", "cat": "cond" },
+            { "type": "condOppHasPuck", "cat": "cond" },
+            { "type": "actAggressiveGap", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condOppHasPuck", "cat": "cond" },
+            { "type": "condAmIClosest", "cat": "cond", "dist": "60" },
+            { "type": "actSmartIntercept", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condLoosePuck", "cat": "cond" },
+            { "type": "condAmIClosest", "cat": "cond", "dist": "40" },
+            { "type": "actSmartIntercept", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "condInShotRange", "cat": "cond", "dist": "80" },
+            { "type": "actSmartShoot", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "condPuckInOffZone", "cat": "cond" },
+            { "type": "actOzoneReliefPass", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "condWeightedPassCheck", "cat": "cond", "bias": "50", "fear": "50", "vision": "50" },
+            { "type": "actSmartPass", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "actExecuteCarry", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "1" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "60", "minOpp": "400", "minLeft": "150", "minRight": "150" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "2" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "180", "minOpp": "300", "minLeft": "150", "minRight": "150" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "3" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "200", "minOpp": "325", "minLeft": "200", "minRight": "0" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "4" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "300", "minOpp": "325", "minLeft": "200", "minRight": "0" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "5" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "550", "minOpp": "0", "minLeft": "200", "minRight": "0" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "6" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "550", "minOpp": "0", "minLeft": "200", "minRight": "0" }
+          ]
+        }
+      ]
+    }
+  ],
+  "lw": [
+    {
+      "type": "Selector",
+      "cat": "struct",
+      "children": [
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condOppHasPuck", "cat": "cond" },
+            { "type": "condAmIClosest", "cat": "cond", "dist": "100" },
+            { "type": "actAggressiveGap", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condOppHasPuck", "cat": "cond" },
+            { "type": "condAmIClosest", "cat": "cond", "dist": "60" },
+            { "type": "actSmartIntercept", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condLoosePuck", "cat": "cond" },
+            { "type": "condAmIClosest", "cat": "cond", "dist": "50" },
+            { "type": "actSmartIntercept", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "condInShotRange", "cat": "cond", "dist": "100" },
+            { "type": "actSmartShoot", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "condPuckInOffZone", "cat": "cond" },
+            { "type": "actOzoneReliefPass", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "condForwardLaneClear", "cat": "cond" },
+            { "type": "actExecutePass", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "actExecuteCarry", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "1" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "30", "minOpp": "450", "minLeft": "260", "minRight": "0" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "2" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "100", "minOpp": "450", "minLeft": "260", "minRight": "0" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "3" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "100", "minOpp": "325", "minLeft": "260", "minRight": "0" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "4" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "200", "minOpp": "325", "minLeft": "200", "minRight": "0" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "5" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "550", "minOpp": "0", "minLeft": "200", "minRight": "0" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "6" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "550", "minOpp": "0", "minLeft": "200", "minRight": "0" }
+          ]
+        }
+      ]
+    }
+  ],
+  "rw": [
+    {
+      "type": "Selector",
+      "cat": "struct",
+      "children": [
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condOppHasPuck", "cat": "cond" },
+            { "type": "condAmIClosest", "cat": "cond", "dist": "100" },
+            { "type": "actAggressiveGap", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condOppHasPuck", "cat": "cond" },
+            { "type": "condAmIClosest", "cat": "cond", "dist": "60" },
+            { "type": "actSmartIntercept", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condLoosePuck", "cat": "cond" },
+            { "type": "condAmIClosest", "cat": "cond", "dist": "50" },
+            { "type": "actSmartIntercept", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "condInShotRange", "cat": "cond", "dist": "100" },
+            { "type": "actSmartShoot", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "condPuckInOffZone", "cat": "cond" },
+            { "type": "actOzoneReliefPass", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "condForwardLaneClear", "cat": "cond" },
+            { "type": "actExecutePass", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "actExecuteCarry", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "1" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "30", "minOpp": "450", "minLeft": "0", "minRight": "260" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "2" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "100", "minOpp": "450", "minLeft": "0", "minRight": "260" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "3" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "100", "minOpp": "325", "minLeft": "0", "minRight": "260" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "4" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "200", "minOpp": "325", "minLeft": "0", "minRight": "200" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "5" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "550", "minOpp": "0", "minLeft": "0", "minRight": "200" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "6" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "550", "minOpp": "0", "minLeft": "0", "minRight": "200" }
+          ]
+        }
+      ]
+    }
+  ],
+  "ld": [
+    {
+      "type": "Selector",
+      "cat": "struct",
+      "children": [
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condPuckInDefZone", "cat": "cond" },
+            { "type": "condOppHasPuck", "cat": "cond" },
+            { "type": "actAggressiveGap", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condPuckInDefZone", "cat": "cond" },
+            { "type": "condOppHasPuck", "cat": "cond" },
+            { "type": "condAmIClosest", "cat": "cond", "dist": "60" },
+            { "type": "actSmartIntercept", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condLoosePuck", "cat": "cond" },
+            { "type": "condAmIClosest", "cat": "cond", "dist": "70" },
+            { "type": "actSmartIntercept", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "condInShotRange", "cat": "cond", "dist": "200" },
+            { "type": "actSmartShoot", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "condPuckInOffZone", "cat": "cond" },
+            { "type": "actOzoneReliefPass", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "condForwardLaneClear", "cat": "cond" },
+            { "type": "actExecutePass", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "actExecuteCarry", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "1" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "30", "minOpp": "600", "minLeft": "160", "minRight": "0" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "2" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "40", "minOpp": "500", "minLeft": "200", "minRight": "0" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condOppHasPuck", "cat": "cond" },
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "3" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "30", "minOpp": "550", "minLeft": "140", "minRight": "0" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condOppHasPuck", "cat": "cond" },
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "4" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "30", "minOpp": "550", "minLeft": "160", "minRight": "0" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condOppHasPuck", "cat": "cond" },
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "5" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "0", "minOpp": "425", "minLeft": "150", "minRight": "0" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condOppHasPuck", "cat": "cond" },
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "6" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "0", "minOpp": "325", "minLeft": "150", "minRight": "0" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "5" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "180", "minOpp": "180", "minLeft": "100", "minRight": "0" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "6" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "440", "minOpp": "180", "minLeft": "100", "minRight": "0" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "4" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "0", "minOpp": "450", "minLeft": "160", "minRight": "0" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "3" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "60", "minOpp": "500", "minLeft": "140", "minRight": "0" }
+          ]
+        }
+      ]
+    }
+  ],
+  "rd": [
+    {
+      "type": "Selector",
+      "cat": "struct",
+      "children": [
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condPuckInDefZone", "cat": "cond" },
+            { "type": "condOppHasPuck", "cat": "cond" },
+            { "type": "actAggressiveGap", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condPuckInDefZone", "cat": "cond" },
+            { "type": "condOppHasPuck", "cat": "cond" },
+            { "type": "condAmIClosest", "cat": "cond", "dist": "60" },
+            { "type": "actSmartIntercept", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condLoosePuck", "cat": "cond" },
+            { "type": "condAmIClosest", "cat": "cond", "dist": "70" },
+            { "type": "actSmartIntercept", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "condInShotRange", "cat": "cond", "dist": "250" },
+            { "type": "actSmartShoot", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "condPuckInOffZone", "cat": "cond" },
+            { "type": "actOzoneReliefPass", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "condForwardLaneClear", "cat": "cond" },
+            { "type": "actExecutePass", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "actExecuteCarry", "cat": "act" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "1" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "30", "minOpp": "600", "minLeft": "0", "minRight": "160" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "2" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "40", "minOpp": "500", "minLeft": "0", "minRight": "200" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condOppHasPuck", "cat": "cond" },
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "3" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "30", "minOpp": "550", "minLeft": "0", "minRight": "140" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condOppHasPuck", "cat": "cond" },
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "4" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "30", "minOpp": "550", "minLeft": "0", "minRight": "160" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condOppHasPuck", "cat": "cond" },
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "5" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "0", "minOpp": "425", "minLeft": "0", "minRight": "150" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condOppHasPuck", "cat": "cond" },
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "6" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "0", "minOpp": "325", "minLeft": "0", "minRight": "150" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "5" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "180", "minOpp": "180", "minLeft": "0", "minRight": "150" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "6" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "440", "minOpp": "180", "minLeft": "0", "minRight": "150" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "4" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "0", "minOpp": "450", "minLeft": "0", "minRight": "160" }
+          ]
+        },
+        {
+          "type": "Sequence",
+          "cat": "struct",
+          "children": [
+            { "type": "condPuckInZone", "cat": "cond", "zoneindex": "3" },
+            { "type": "actGoToPosition", "cat": "act", "minOwn": "60", "minOpp": "500", "minLeft": "0", "minRight": "140" }
+          ]
+        }
+      ]
+    }
+  ]
+}

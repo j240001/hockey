@@ -1,0 +1,2212 @@
+// =========================================================
+// AI HOCKEY HELPERS (Math, Physics, Queries)
+// =========================================================
+
+
+
+
+
+
+// =========================================================
+// BEHAVIOUR TREE CORE ENGINE (Shared by Team0 + Team1)
+// =========================================================
+
+class Node {
+    tick(bb) { return null; }
+}
+
+class ConditionNode extends Node {
+    constructor(fn) { super(); this.fn = fn; }
+    tick(bb) { return this.fn(bb) ? true : null; }
+}
+
+class ActionNode extends Node {
+    // Setting label = "Action" as a fallback
+    constructor(fn, label = "NO NAME") { 
+        super(); 
+        this.fn = fn; 
+        this.label = label; 
+    }
+    tick(bb) { 
+        const res = this.fn(bb);
+        if (res && typeof res === 'object') {
+            // If no label was provided, it uses the fallback "Action"
+            res.nodeLabel = this.label; 
+        }
+        return res || null; 
+    }
+}
+
+class SelectorNode extends Node {
+    constructor(children) { super(); this.children = children; }
+    tick(bb) {
+        for (const c of this.children) {
+            const res = c.tick(bb);
+            if (res) return res;
+        }
+        return null;
+    }
+}
+
+class SequenceNode extends Node {
+    constructor(children) { super(); this.children = children; }
+    tick(bb) {
+        let last = null;
+        for (const c of this.children) {
+            const res = c.tick(bb);
+            if (!res) return null;
+            last = res;
+        }
+        return last;
+    }
+}
+
+
+
+
+
+// --- 1. MATH UTILS ---
+
+function clamp(v, lo, hi) {
+    return v < lo ? lo : (v > hi ? hi : v);
+}
+
+function normalizeAngle(a) {
+    while (a <= -Math.PI) a += 2 * Math.PI;
+    while (a >  Math.PI)  a -= 2 * Math.PI;
+    return a;
+}
+
+function pointLineDistance(x1, y1, x2, y2, px, py) {
+    const A = px - x1;
+    const B = py - y1;
+    const C = x2 - x1;
+    const D = y2 - y1;
+
+    const dot = A*C + B*D;
+    const lenSq = C*C + D*D;
+    const t = Math.max(0, Math.min(1, dot / lenSq));
+
+    return Math.hypot(px - (x1 + t * C), py - (y1 + t * D));
+}
+
+
+
+
+
+
+
+
+
+// --- INTELLIGENCE HELPERS ---
+function intel_test(bb) {
+    if (!bb || !bb.p || typeof players === 'undefined') return "FAILURE";
+    for (let m of players) {
+        // Must be teammate, not me, and NOT the goalie role
+        if (m.team === bb.p.team && m.id !== bb.p.id && m.role !== "Goalie") {
+            let minDistance = 9999;
+            for (let o of players) {
+                if (o.team !== bb.p.team && o.type !== 'goalie') {
+                    const d = Math.hypot(o.x - m.x, o.y - m.y);
+                    if (d < minDistance) minDistance = d;
+                }
+            }
+            m.intel_nearestOppDist = minDistance; 
+        }
+    }
+    return "FAILURE"; 
+}
+
+function carrier_intel(bb, isForward = 1) {
+    if (!bb || !bb.p || typeof players === 'undefined') return "FAILURE";
+    let minDistance = 9999;
+    for (let o of players) {
+        if (o.team !== bb.p.team && o.role !== "Goalie") {
+            if (isForward === 1) {
+                const relativeX = (o.x - bb.p.x) * bb.forwardDir;
+                if (relativeX < -20) continue; 
+            }
+            const d = Math.hypot(o.x - bb.p.x, o.y - bb.p.y);
+            if (d < minDistance) minDistance = d;
+        }
+    }
+    bb.p.carrier_patience_dist = minDistance;
+    return "FAILURE"; 
+}
+
+
+
+function pass_test(bb, minOpenness = 40) {
+    if (!bb || !bb.p || typeof players === 'undefined') return "FAILURE";
+    let bestTeammate = null, maxUpIceScore = -Infinity;
+    
+    // Define the Offensive Blue Line for filtering
+    const blueLineX = 500 + (bb.forwardDir * 110);
+
+    for (let m of players) {
+        if (m.team === bb.p.team && m.id !== bb.p.id && m.role !== "Goalie") {
+            
+            // --- THE FIX: ZONE ENFORCEMENT ---
+            // If the puck is in the Offensive Zone, teammates MUST be in the zone too.
+            if (bb.puckInOffZone) {
+                const isMateInZone = (m.x - blueLineX) * bb.forwardDir > 0;
+                if (!isMateInZone) continue; // Ignore trailing dorks
+            }
+
+            const safety = m.intel_nearestOppDist || 0;
+            if (safety >= minOpenness) {
+                if (typeof isLaneBlocked === 'function' && isLaneBlocked(bb.p.x, bb.p.y, m.x, m.y, bb.p.team)) {
+                    continue;
+                }
+                const upIceScore = m.x * bb.forwardDir; 
+                if (upIceScore > maxUpIceScore) {
+                    maxUpIceScore = upIceScore;
+                    bestTeammate = m;
+                }
+            }
+        }
+    }
+    if (bestTeammate) return { tx: bestTeammate.x, ty: bestTeammate.y, action: "pass", target: bestTeammate };
+    return "FAILURE";
+}
+
+
+
+function updateSituationalIntelligence(bb, params) {
+    const p_safe = params || {}; // Safety against missing params
+    const PATIENCE_BOX = Number(p_safe.patienceBox || 80); 
+    const VACUUM_BOX = Number(p_safe.vacuumBox || 120);  
+    const RY_CENTER = (typeof RY !== 'undefined' ? RY : 300);
+    const forward = bb.forwardDir;
+
+    // Reset blackboard data
+    bb.intel_opponentsTop = 0;
+    bb.intel_opponentsCenter = 0;
+    bb.intel_opponentsBottom = 0;
+
+    if (!bb.p || typeof players === 'undefined') return "FAILURE";
+
+    for (let o of players) {
+        if (o.team !== bb.p.team && o.type !== 'goalie') {
+            if ((o.x - bb.p.x) * forward > 0) {
+                const distY = o.y - RY_CENTER;
+                if (distY < -80) bb.intel_opponentsTop++;
+                else if (distY > 80) bb.intel_opponentsBottom++;
+                else bb.intel_opponentsCenter++;
+            }
+        }
+    }
+
+    for (let m of players) {
+        if (m.team !== bb.p.team || m.type !== 'skater') continue;
+
+        let enemiesInPatience = 0;
+        let closestDist = 9999;
+        for (let o of players) {
+            if (o.team !== m.team && o.type !== 'goalie') {
+                const dx = Math.abs(o.x - m.x);
+                const dy = Math.abs(o.y - m.y);
+                const d = Math.hypot(dx, dy);
+                if (dx < PATIENCE_BOX/2 && dy < PATIENCE_BOX/2) enemiesInPatience++;
+                if (d < closestDist) closestDist = d;
+            }
+        }
+        m.intel_pressure = enemiesInPatience;
+        m.intel_closestOpp = closestDist;
+
+        // Ensure lead prediction exists
+        const lead = (typeof predictLeadPass === 'function') ? predictLeadPass(bb.p, m) : { x: m.x, y: m.y };
+        if (!lead) continue;
+
+        let enemiesInVacuum = 0;
+        let leadClosestOpp = 9999;
+        for (let o of players) {
+            if (o.team !== m.team && o.type !== 'goalie') {
+                const dx = Math.abs(o.x - lead.x);
+                const dy = Math.abs(o.y - lead.y);
+                const d = Math.hypot(dx, dy);
+                if (dx < VACUUM_BOX/2 && dy < VACUUM_BOX/2) enemiesInVacuum++;
+                if (d < leadClosestOpp) leadClosestOpp = d;
+            }
+        }
+        
+        m.intel_vacuumCount = enemiesInVacuum;
+        m.intel_leadX = lead.x;
+        m.intel_leadY = lead.y;
+        m.intel_opennessScore = leadClosestOpp;
+        m.intel_isPassable = !isLaneBlocked(bb.p.x, bb.p.y, lead.x, lead.y, bb.p.team) && 
+                             !passIntersectsOwnNet(bb.p, lead.x, lead.y);
+    }
+    return "FAILURE"; // Explicitly return FAILURE so the Sequence moves to the next node
+}
+
+function executeTacticalKeepAway(p, bb, params) {
+    const minVacuum = Number(params.minVacuum || 0);
+    let bestTeammate = null;
+    let maxOpenness = -1;
+
+    // Only look for teammates with pre-calculated intel
+    const candidates = players.filter(m => 
+        m.team === p.team && m.id !== p.id && m.type === 'skater' &&
+        m.intel_isPassable === true && m.intel_vacuumCount <= minVacuum
+    );
+
+    for (let m of candidates) {
+        if (m.intel_opennessScore > maxOpenness) {
+            maxOpenness = m.intel_opennessScore;
+            bestTeammate = m;
+        }
+    }
+
+    if (bestTeammate) {
+        return { tx: bestTeammate.intel_leadX, ty: bestTeammate.intel_leadY, action: "pass", target: bestTeammate };
+    }
+    return "FAILURE"; // Return string "FAILURE" to satisfy SequenceNode
+}
+
+
+
+
+
+
+
+function findQualifiedBreakout(p, bb, params) {
+    const safety = Number(params.safety || 60);
+    const fwdLimit = Number(params.fwd || 150);
+    const backLimit = Number(params.back || 10);
+    const RY_CENTER = (typeof RY !== 'undefined' ? RY : 300);
+
+    const mates = players.filter(m => m.team === p.team && m.id !== p.id && m.type === 'skater');
+    
+    // Priority Sort: Teammates with similar Y positions (same lane) come first
+    mates.sort((a, b) => Math.abs(a.y - p.y) - Math.abs(b.y - p.y));
+
+    for (const m of mates) {
+        // 1. Distance Limits (Forward/Backward)
+        const progress = (m.x - p.x) * bb.forwardDir;
+        if (progress > fwdLimit || progress < -backLimit) continue;
+
+        // 2. Lane Blockage & Net Check
+        if (isLaneBlocked(p.x, p.y, m.x, m.y, p.team)) continue;
+        if (typeof passIntersectsOwnNet === 'function' && passIntersectsOwnNet(p, m.x, m.y)) continue;
+
+        // 3. Safety Radius (No opponents within X pixels)
+        let opponentNear = false;
+        for (const o of players) {
+            if (o.team !== p.team && Math.hypot(m.x - o.x, m.y - o.y) < safety) {
+                opponentNear = true;
+                break;
+            }
+        }
+        if (opponentNear) continue;
+
+        // If we reach here, this is the highest priority qualified teammate
+        return m;
+    }
+    return null;
+}
+
+
+
+function findDzoneReliefTarget(p, bb) {
+    const RY_CENTER = (typeof RY !== 'undefined' ? RY : 300);
+    const SLOT_WIDTH = 80; // Distance from center where passing is "Illegal"
+    let best = null;
+
+    const teammates = players.filter(m => m.team === p.team && m.id !== p.id && m.type === 'skater');
+
+    // --- STEP 1: Look for "Up the Wall" teammate ---
+    for (let m of teammates) {
+        const sameWall = Math.sign(m.y - RY_CENTER) === Math.sign(p.y - RY_CENTER);
+        const furtherAhead = (m.x - p.x) * bb.forwardDir > 50;
+        const nearBoard = Math.abs(m.y - RY_CENTER) > SLOT_WIDTH;
+
+        if (sameWall && furtherAhead && nearBoard) {
+            if (!isLaneBlocked(p.x, p.y, m.x, m.y, p.team) && !passIntersectsOwnNet(p, m.x, m.y)) {
+                return m; // Found the winger on the wall!
+            }
+        }
+    }
+
+    // --- STEP 2: Look for "Behind the Net" teammate (D-to-D) ---
+    for (let m of teammates) {
+        const oppositeWall = Math.sign(m.y - RY_CENTER) !== Math.sign(p.y - RY_CENTER);
+        
+        // Check if teammate is physically behind the goal line
+        // If attacking right (dir 1), behind net is < myGoalX
+        // If attacking left (dir -1), behind net is > myGoalX
+        const isBehindNet = (m.x - bb.myGoalX) * bb.forwardDir < 0; 
+
+        if (oppositeWall && isBehindNet) {
+            const midX = (p.x + m.x) / 2;
+            // The midpoint must ALSO be behind the goal line to avoid the slot
+            const pathIsBehindNet = (midX - bb.myGoalX) * bb.forwardDir < 0;
+
+            if (pathIsBehindNet && !isLaneBlocked(p.x, p.y, m.x, m.y, p.team)) {
+                return m; 
+            }
+        }
+    }
+
+    return null; // No safe perimeter pass found
+}
+
+
+
+
+function canSeeNet(p) {
+    const goalX = (p.team === 0) ? (typeof goal2!=='undefined'?goal2:825) : (typeof goal1!=='undefined'?goal1:175);
+    const goalY = (typeof RY !== 'undefined' ? RY : 300);
+    
+    // 1. DEAD ANGLE CHECK (The Fix)
+    // If we are attacking Right (Goal > 500), we must be to the LEFT of the goal line.
+    // If we are attacking Left (Goal < 500), we must be to the RIGHT of the goal line.
+    // We add a 10px buffer so they don't shoot from zero-angle either.
+    const attackingRight = (goalX > 500);
+    
+    if (attackingRight) {
+        if (p.x > goalX - 10) return false; // Too deep!
+    } else {
+        if (p.x < goalX + 10) return false; // Too deep!
+    }
+
+    // 2. OBSTACLE CHECK
+    for (const o of players) {
+        if (o.team === p.team) continue;
+        if (o.type === "goalie") continue; 
+        const distToShot = pointLineDistance(p.x, p.y, goalX, goalY, o.x, o.y);
+        if (distToShot < 15) return false;
+    }
+    return true;
+}
+
+
+function isLaneBlocked(x1, y1, x2, y2, team) {
+    for (const o of players) {
+        // 1. Skip teammates (You can't block your own team's shot)
+        if (o.team === team) continue;
+
+        // 2. SKIP THE GOALIE (The Fix)
+        if (o.type === 'goalie') continue; 
+        
+        // 3. Calculate distance from this player to the shot line
+        const d = pointLineDistance(x1, y1, x2, y2, o.x, o.y);
+        
+        // 4. Debugging Output
+        // 18px is the "width" of the blockage
+        if (d < 18) {
+            // console.log(`⛔ BLOCKED by ${o.role} (Team ${o.team}). Dist: ${d.toFixed(1)}px`);
+            return true;
+        }
+    }
+    return false;
+}
+
+
+function isPressured(p) {
+    for (const o of players) {
+        if (o.team === p.team) continue;
+        const d = Math.hypot(o.x - p.x, o.y - p.y);
+        if (d < 55) return true;
+    }
+    return false;
+}
+
+function getPlayerById(id) {
+    return players.find(p => p.id === id) || null;
+}
+
+function getPuckCarrier() {
+    if (puck.ownerId === null) return null;
+    return getPlayerById(puck.ownerId);
+}
+
+
+
+
+
+
+
+// --- 3. TACTICAL HELPERS (Calculations) ---
+
+
+
+function getSmartShootTarget(p, bb) {
+    // 1. Where is the goal?
+    const targetX = bb.enemyGoal;
+    const targetY = (typeof RY !== 'undefined' ? RY : 300);
+
+    // 2. Call your NEW function
+    // If we can see the net (ignoring the goalie), then we shoot!
+    if (canSeeNet(p)) {
+        return { tx: targetX, ty: targetY, action: "shoot" };
+    }
+    
+    // 3. If blocked, return null (so the AI passes instead)
+    return null;
+}
+
+
+
+function findLeastGuardedInZone(p, bb) {
+
+
+    // If an opponent is within 15px, the player is too busy 
+    // battling to look for a pass. This prevents the NaN scrum.
+    for (let o of players) {
+        if (o.team !== p.team && o.type !== 'goalie') {
+            const d = Math.hypot(p.x - o.x, p.y - o.y);
+            if (d < 15) return null; // Can't see teammates right now!
+        }
+    }
+    
+    let bestTeammate = null;
+    let maxSafetyScore = -1;
+
+    for (let m of players) {
+        if (m.team === p.team && m.id !== p.id && m.type === 'skater') {
+            
+            // 1. Ozone Check: Must be in the offensive zone
+            const inOzone = (m.x - 500) * bb.forwardDir > 110; 
+            if (!inOzone) continue;
+
+            // --- 2. MOVEMENT PREDICTION (The Fix) ---
+            // Calculate where the teammate will be when the puck arrives
+            const lead = (typeof predictLeadPass === 'function') ? predictLeadPass(p, m) : {x: m.x, y: m.y};
+            if (!lead) continue;
+
+            // 3. Future Lane Check: Is the path to the LEAD spot clear?
+            if (typeof isLaneBlocked === 'function' && isLaneBlocked(p.x, p.y, lead.x, lead.y, p.team)) {
+                continue;
+            }
+            
+            // Safety: Don't pass through your own net (rare but possible in deep Ozone)
+            if (typeof passIntersectsOwnNet === 'function' && passIntersectsOwnNet(p, lead.x, lead.y)) {
+                continue;
+            }
+
+            // 4. Future Pressure Check: How guarded is that LEAD spot?
+            let minOppDist = 9999;
+            for (let opp of players) {
+                if (opp.team !== p.team) {
+                    // Score safety based on the opponent's proximity to the receiving spot
+                    const d = Math.hypot(lead.x - opp.x, lead.y - opp.y);
+                    if (d < minOppDist) minOppDist = d;
+                }
+            }
+
+            // 5. Scoring: Favor the teammate who is most open at their destination
+            if (minOppDist > maxSafetyScore) {
+                maxSafetyScore = minOppDist;
+                // Store the teammate, but we need the lead coordinates for the final action
+                bestTeammate = { ...m, x: lead.x, y: lead.y };
+            }
+        }
+    }
+    return bestTeammate;
+}
+
+
+
+
+
+
+
+
+function getPositionWithinLimits(p, bb, d) {
+    const rinkTop = (typeof RY !== 'undefined' ? RY : 300) - 170; 
+    const rinkBot = (typeof RY !== 'undefined' ? RY : 300) + 170;
+
+    // FIX: Force these to be Numbers
+    const minOwn = Number(d.minDistOwnGoal || 0);
+    const minOpp = Number(d.minDistOppGoal || 0);
+    const minLeft = Number(d.minDistLeftBoard || 0);
+    const minRight = Number(d.minDistRightBoard || 0);
+
+    let moveX = p.x;
+    let moveY = p.y;
+    let needsMove = false;
+
+    if (Math.abs(p.x - bb.myGoalX) < minOwn) {
+        moveX = bb.myGoalX + (bb.forwardDir * minOwn);
+        needsMove = true;
+    } else if (Math.abs(p.x - bb.enemyGoal) < minOpp) {
+        moveX = bb.enemyGoal - (bb.forwardDir * minOpp);
+        needsMove = true;
+    }
+
+    if (Math.abs(p.y - rinkTop) < minLeft) {
+        moveY = rinkTop + minLeft; // Now calculates 280 instead of "130150"
+        needsMove = true;
+    } else if (Math.abs(p.y - rinkBot) < minRight) {
+        moveY = rinkBot - minRight;
+        needsMove = true;
+    }
+
+    return { tx: moveX, ty: moveY, action: "none" };
+}
+
+
+
+
+// =========================================================
+// OFF-BALL MOVEMENT: CRASH THE BACKDOOR
+// =========================================================
+
+const BACKDOOR_DEPTH = 60;  // Distance from Goal Line
+const BACKDOOR_WIDTH = 75;   // Distance from Center Ice
+
+// =========================================================
+// OFF-BALL MOVEMENT: CRASH THE BACKDOOR (Center-Origin Math)
+// =========================================================
+function getBackdoorPosition(p) {
+    // 1. CONVERT TO RELATIVE COORDINATES (Center = 0,0)
+    // Canvas X (0 to 1000) -> Relative X (-500 to 500)
+    // Canvas Y (0 to 600)  -> Relative Y (-300 to 300)
+    const puckRelY = puck.y - RY;
+    const goalAbsX = (p.team === 0 ? goal2 : goal1);
+    const goalRelX = goalAbsX - RX; // e.g. +325 or -325
+
+    // 2. DETERMINE DIRECTION
+    // Sign is 1 if goal is Right, -1 if goal is Left
+    const dir = Math.sign(goalRelX); 
+
+    // 3. CALCULATE RELATIVE TARGET
+    // Depth: Back off from the goal line by specific depth
+    // If goal is +325, target is +325 - 120 = +205
+    // If goal is -325, target is -325 - (-120) = -205
+    const targetRelX = goalRelX - (dir * BACKDOOR_DEPTH);
+
+    // Width: Go to opposite side of puck
+    // If puck is Top (-), go Bottom (+). If puck is Bottom (+), go Top (-).
+    const targetRelY = (puckRelY < 0) ? BACKDOOR_WIDTH : -BACKDOOR_WIDTH;
+
+    // 4. CONVERT BACK TO ABSOLUTE (Canvas)
+    return { 
+        tx: targetRelX + RX, 
+        ty: targetRelY + RY, 
+        action: "none" 
+    };
+}
+
+
+
+
+
+
+
+
+// =========================================================
+// ONE-TIMER / BACKDOOR LOGIC
+// =========================================================
+function findBackdoorTarget(p, maxDist = 100, minOpen = 50, goalieLimit = 60) {
+    const enemyGoalX = (p.team === 0 ? goal2 : goal1);
+    const enemyGoalY = RY; 
+
+    for (const mate of players) {
+        // 1. Basic Checks (Teammate, Skater, Not Me)
+        if (mate.team !== p.team || mate.id === p.id || mate.type !== "skater") continue;
+
+        // 2. THE ZONE CHECK: Must be inside the blue line (x=110)
+        if (Math.abs(mate.x) < 110) continue; 
+
+        // 3. RANGE CHECK: Use the 'dist' parameter from the builder
+        const distToGoal = Math.hypot(mate.x - enemyGoalX, mate.y - enemyGoalY);
+        if (distToGoal > maxDist) continue; 
+
+        // 4. COVERAGE CHECK: Use the 'open' parameter from the builder
+        let isCovered = false;
+        for (const opp of players) {
+            if (opp.team === p.team) continue;
+            // Converting 'openness' score to a distance check
+            if (Math.hypot(opp.x - mate.x, opp.y - mate.y) < minOpen) {
+                isCovered = true; 
+                break;
+            }
+        }
+        if (isCovered) continue;
+
+        // 5. GOALIE CHECK: Use the 'goal' parameter from the builder
+        const goalie = players.find(m => m.team !== p.team && m.type === 'goalie');
+        if (goalie) {
+            const distGoalieToBackdoor = Math.hypot(goalie.x - mate.x, goalie.y - mate.y);
+            if (distGoalieToBackdoor < goalieLimit) continue; // Goalie has the post covered
+        }
+
+        // 6. LANE CHECK
+        if (isLaneBlocked(p.x, p.y, mate.x, mate.y, p.team)) continue;
+
+        return mate;
+    }
+    return null;
+}
+
+
+
+
+// =========================================================
+// REGROUP LOGIC: Check for Offside Teammates
+// =========================================================
+function checkTeammatesOffside(p) {
+    const forwardDir = (p.team === 0 ? 1 : -1);
+    
+    // Define the Offensive Blue Line
+    // RX (500) + Direction * 110 = 610 (Right) or 390 (Left)
+    const blueLineX = RX + (forwardDir * 110); 
+    
+    for (const mate of players) {
+        if (mate.team !== p.team || mate.id === p.id || mate.type !== "skater") continue;
+        
+        // Check if teammate is "Deep" in the zone relative to the blue line
+        // We add a 10px buffer so they have to fully clear it
+        if ((mate.x - blueLineX) * forwardDir > 5) {
+            return true; // STOP! Someone is still in there.
+        }
+    }
+    return false;
+}
+
+
+
+
+
+
+
+
+
+
+
+// =========================================================
+// PUCK CLEARING: AWAY FROM NET FRONT (Safety Check Added)
+// =========================================================
+function clearPuckDefensive(p) {
+    const forwardDir = (p.team === 0 ? goal2 : goal1) > p.x ? 1 : -1;
+    const clearDistance = 200; // Fixed distance for the clear
+    
+    // 1. Calculate base X target (400 units forward)
+    const targetX = p.x + forwardDir * clearDistance; 
+
+    // 2. Define Candidate Y Targets (Wide open areas near side boards)
+    const Y_WIDE_HIGH = RY - 150; 
+    const Y_WIDE_LOW  = RY + 150;
+    
+    let scoreHigh = 0;
+    let scoreLow = 0;
+
+    // 3. Score the two lanes against opponents
+    for (const o of players) {
+        // Skip teammates and goalies
+        if (o.team === p.team || o.type === "goalie") continue; 
+        
+        // --- High Lane Check (p.x, p.y) to (targetX, Y_WIDE_HIGH) ---
+        // Score is penalized if opponent is too close to the path
+        const distToHighLane = pointLineDistance(p.x, p.y, targetX, Y_WIDE_HIGH, o.x, o.y);
+        if (distToHighLane < 40) { // Check if opponent is within a 40px wide corridor
+            scoreHigh -= (40 - distToHighLane); // Higher penalty for closer opponents
+        }
+
+        // --- Low Lane Check (p.x, p.y) to (targetX, Y_WIDE_LOW) ---
+        const distToLowLane = pointLineDistance(p.x, p.y, targetX, Y_WIDE_LOW, o.x, o.y);
+        if (distToLowLane < 40) {
+            scoreLow -= (40 - distToLowLane);
+        }
+    }
+    
+    // 4. Final Selection Logic
+    let finalY;
+
+    if (scoreHigh > scoreLow) {
+        finalY = Y_WIDE_HIGH;
+    } else if (scoreLow > scoreHigh) {
+        finalY = Y_WIDE_LOW;
+    } else {
+        // TIE BREAKER: If both are equally safe/unsafe, aim for the side opposite the player's current Y position (default widest clear)
+        finalY = (p.y < RY) ? Y_WIDE_LOW : Y_WIDE_HIGH;
+    }
+
+    return { tx: targetX, ty: finalY, action: "shoot" };
+}
+
+
+
+
+
+
+
+// =========================================================
+// Predict target for a pass (VARIABLE SPEED)
+// =========================================================
+function predictLeadPass(passer, receiver) {
+    // 1. Calculate Distance
+    const dx = receiver.x - passer.x;
+    const dy = receiver.y - passer.y;
+    const distNow = Math.hypot(dx, dy);
+    
+    // SAFETY: If distance is too small or NaN, don't do math. 
+    // Just return the receiver's current spot as the 'lead'.
+    if (distNow < 1 || isNaN(distNow)) {
+        return { x: receiver.x, y: receiver.y, t: 0 };
+    }
+
+    const mentalDelay = 20; // Matches p.possessionTime > 20 in updateAISkater
+
+    // 2. VARIABLE SPEED LOGIC 
+    let passSpeed = 5.5 + (distNow / 40.0);
+    if (passSpeed > 14.0) passSpeed = 14.0;
+    
+    // Extra guard: Ensure passSpeed is a valid positive number
+    if (isNaN(passSpeed) || passSpeed <= 0) passSpeed = 5.5;
+
+    // 3. Calculate Travel Time
+    const travelFrames = distNow / passSpeed;
+
+    // 4. Calculate Lead Position with NaN Guards on Velocity
+    const rvX = isNaN(receiver.vx) ? 0 : receiver.vx;
+    const rvY = isNaN(receiver.vy) ? 0 : receiver.vy;
+
+    const totalFrames = mentalDelay + travelFrames;
+    const leadX = receiver.x + (rvX * totalFrames);
+    const leadY = receiver.y + (rvY * totalFrames);
+
+    // 5. Final Sanitization: Clamp inside rink and check for NaN
+    const px = Math.max(120, Math.min(880, isNaN(leadX) ? receiver.x : leadX));
+    const py = Math.max(170, Math.min(430, isNaN(leadY) ? receiver.y : leadY));
+
+    return { x: px, y: py, t: travelFrames };
+}
+
+
+
+// =========================================================
+// Determine which teammates are "open"
+// =========================================================
+// 
+function findOpenTeammates(passer) {
+
+    const results = [];
+    const mates = players.filter(
+        m => m.team === passer.team && m.id !== passer.id && m.type === "skater"
+    );
+
+    for (const mate of mates) {
+
+        // --- Predict where teammate will be ---
+        const lead = predictLeadPass(passer, mate);
+        if (!lead) continue;
+
+        const laneCurrentBlocked =
+            isLaneBlocked(passer.x, passer.y, mate.x, mate.y, passer.team) ||
+            passIntersectsOwnNet(passer, mate.x, mate.y);
+
+        const laneFutureBlocked =
+            isLaneBlocked(passer.x, passer.y, lead.x, lead.y, passer.team) ||
+            passIntersectsOwnNet(passer, lead.x, lead.y);
+
+
+        const currentClear = !laneCurrentBlocked;
+        const futureClear  = !laneFutureBlocked;
+
+        results.push({
+            mate: mate,
+            currentClear,
+            futureClear,
+            leadX: lead.x,
+            leadY: lead.y,
+            travelFrames: lead.t
+        });
+    }
+
+    return results;
+}
+
+
+
+
+// =========================================================
+// Neutral Zone: Find eligible forward targets for a D-man
+// =========================================================
+function findNeutralZonePassTargets(passer) {
+
+    const results = [];
+
+    const mates = players.filter(m =>
+        m.team === passer.team &&
+        m.id !== passer.id &&
+        m.type === "skater"
+    );
+
+    // Determine attacking direction
+    const enemyGoalX = (passer.team === 0 ? goal2 : goal1);
+    const forwardDir = Math.sign(enemyGoalX - passer.x);
+
+    for (const mate of mates) {
+
+        const lead = predictLeadPass(passer, mate);
+        if (!lead) continue;
+
+        // Must be ahead of the passer
+        const ahead = (mate.x - passer.x) * forwardDir > 0;
+        if (!ahead) continue;
+
+        // Must NOT already be inside O-zone early (offside morons)
+        const blueLineX = RX + (110 * forwardDir);
+        const matePastBlue = (mate.x - blueLineX) * forwardDir > 0;
+        if (matePastBlue) continue;
+
+        // Passing lane must be clear (including net)
+        const laneCurrentBlocked =
+            isLaneBlocked(passer.x, passer.y, mate.x, mate.y, passer.team) ||
+            passIntersectsOwnNet(passer, mate.x, mate.y);
+
+        const laneFutureBlocked =
+            isLaneBlocked(passer.x, passer.y, lead.x, lead.y, passer.team) ||
+            passIntersectsOwnNet(passer, lead.x, lead.y);
+
+        if (laneCurrentBlocked && laneFutureBlocked) continue;
+
+        results.push({
+            mate,
+            leadX: lead.x,
+            leadY: lead.y
+        });
+    }
+
+    return results;
+}
+
+
+
+
+
+
+// =====================================================
+// PURE GEOMETRY: Does the pass line intersect our own goal?
+// =====================================================
+function passIntersectsOwnNet(p, x2, y2) {
+
+    // Determine which goal belongs to this team
+    const myGoalX = (p.team === 0 ? goal1 : goal2);
+
+    // Net dimensions (use same values from GOAL_BLOCKS / GOAL_WALLS)
+    const netHalf = (typeof NET_H !== 'undefined' ? NET_H / 2 + 5 : 25);
+    const netTop  = RY - netHalf;
+    const netBot  = RY + netHalf;
+
+    // Build a segment for the pass
+    const x1 = p.x, y1 = p.y;
+
+    // If both endpoints are completely outside the net x-range, bail out
+    const minX = Math.min(x1, x2);
+    const maxX = Math.max(x1, x2);
+
+    // Net occupies between myGoalX - depth  to myGoalX (for left goal)
+    // or myGoalX to myGoalX + depth (for right goal).
+    const depth = 35;   // Matches your actual physics walls (back + sides)
+
+    const netMinX = (myGoalX < RX ? myGoalX - depth : myGoalX);
+    const netMaxX = (myGoalX < RX ? myGoalX : myGoalX + depth);
+
+    // Quick reject
+    if (maxX < netMinX || minX > netMaxX) return false;
+
+    // Check vertical overlap
+    const minY = Math.min(y1, y2);
+    const maxY = Math.max(y1, y2);
+
+    if (maxY < netTop || minY > netBot) return false;
+
+    // If the segment touches the rectangular net collision area → blocked
+    return true;
+}
+
+
+
+// =========================================================
+// SMART INTERCEPT (Iterative Solver)
+// =========================================================
+function getPuckIntercept(p) {
+    const dist = Math.hypot(puck.x - p.x, puck.y - p.y);
+    const pSpeed = Math.hypot(puck.vx, puck.vy);
+    
+    // 1. STATIONARY PUCK FIX
+    if (pSpeed < 1.5) {
+        
+        // A. CLOSE RANGE (< 60px): AIM DIRECTLY AT PUCK
+        // This stops the "orbiting" effect. If we aim directly at it,
+        // the skater can turn tightly enough to hit the hitbox.
+        if (dist < 30) {
+            return { x: puck.x, y: puck.y };
+        }
+        
+        // B. LONG RANGE: AIM THROUGH IT (SPRINT)
+        // If far away, aim past it to keep velocity high.
+        const angle = Math.atan2(puck.y - p.y, puck.x - p.x);
+        return { 
+            x: puck.x + Math.cos(angle) * 40, 
+            y: puck.y + Math.sin(angle) * 40 
+        };
+    }
+
+    // 2. MOVING PUCK: EXACT PHYSICS SIMULATION
+    let tX = puck.x;
+    let tY = puck.y;
+    let tVX = puck.vx;
+    let tVY = puck.vy;
+    
+    const mySpeed = 2.3; 
+    const friction = 0.993; 
+
+    for(let frames = 1; frames <= 60; frames++) {
+        tX += tVX;
+        tY += tVY;
+        tVX *= friction;
+        tVY *= friction;
+
+        const d = Math.hypot(tX - p.x, tY - p.y);
+        const possibleDist = frames * mySpeed;
+
+        if (possibleDist >= d) {
+            return {
+                x: Math.max(120, Math.min(880, tX)), 
+                y: Math.max(170, Math.min(430, tY))
+            };
+        }
+    }
+
+    return {
+        x: Math.max(120, Math.min(880, tX)),
+        y: Math.max(170, Math.min(430, tY))
+    };
+}
+
+
+
+function condWeightedPassCheck(bb, bias, fear, vision) {
+    const p = bb.p;
+    
+    // 1. CALCULATE PRESSURE (0.0 to 1.0)
+    // How crowded is it right now?
+    let enemyPressure = 0;
+    let closestEnemyDist = 999;
+    
+    if (typeof players !== 'undefined') {
+        for (const o of players) {
+            if (o.team === p.team) continue;
+            const d = Math.hypot(o.x - p.x, o.y - p.y);
+            if (d < closestEnemyDist) closestEnemyDist = d;
+            
+            if (d < 60) enemyPressure += 1.0;       // Very Close
+            else if (d < 120) enemyPressure += 0.5; // Nearby
+        }
+    }
+    // Cap pressure at 2.0 (surrounded)
+    enemyPressure = Math.min(2.0, enemyPressure);
+
+    // 2. CALCULATE SUPPORT (0.0 to 1.0)
+    // Is there actually someone to pass to?
+    let bestTeammateScore = 0;
+    const teammates = (typeof players !== 'undefined') ? players.filter(m => m.team === p.team && m.id !== p.id) : [];
+    
+    for (const mate of teammates) {
+        // Distance Score (Too close is bad, too far is bad)
+        const d = Math.hypot(mate.x - p.x, mate.y - p.y);
+        let distScore = 0;
+        if (d > 100 && d < 400) distScore = 1.0; 
+        
+        // Lane Score (Is the path blocked?)
+        let laneBlocked = false;
+        if (typeof isLaneBlocked === 'function') {
+            laneBlocked = isLaneBlocked(p.x, p.y, mate.x, mate.y, p.team);
+        }
+        
+        if (!laneBlocked && distScore > 0) {
+            // Forward progress bonus (is he closer to net than me?)
+            const myDistToNet = Math.abs(p.x - bb.enemyGoal);
+            const mateDistToNet = Math.abs(mate.x - bb.enemyGoal);
+            const progress = (myDistToNet - mateDistToNet) > 0 ? 0.5 : 0;
+            
+            const total = distScore + progress;
+            if (total > bestTeammateScore) bestTeammateScore = total;
+        }
+    }
+
+    // 3. THE WEIGHTED FORMULA
+    
+    // PASS SCORE CALCULATIONS
+    // Base Bias: The player's natural tendency (0-100)
+    // Panic Factor: Pressure * Fear Parameter
+    // Opportunity Factor: Teammate Quality * Vision Parameter
+    
+    let passScore = (bias * 1.0) + 
+                    (enemyPressure * fear * 1.5) + 
+                    (bestTeammateScore * vision * 1.2);
+
+    // CARRY SCORE CALCULATIONS
+    // Base Preference: The inverse of Bias (100 - Bias)
+    // Open Ice Bonus: If no enemies are close, Carry score goes up automatically
+    
+    let carryScore = (100 - bias);
+    
+    if (closestEnemyDist > 150) {
+        carryScore += 40; // Bonus for having open ice
+    }
+
+    // 4. THE DECISION
+    // If Pass Score wins, return true (Success).
+    // The tree will then execute the NEXT node (Action: Pass).
+    return (passScore > carryScore);
+}
+
+
+
+
+function getAggressiveGapTarget(defender, carrier, goalX) {
+    
+    const GAP_DISTANCE = 60;
+
+    // Net position
+    const gx = goalX;
+    const gy = RY;
+
+    // Line: net → carrier
+    const lx = carrier.x - gx;
+    const ly = carrier.y - gy;
+    const len = Math.hypot(lx, ly) || 1;
+
+    // Unit direction
+    const ux = lx / len;
+    const uy = ly / len;
+
+    // Desired distance from net:
+    // always between net and carrier, at (carrier distance - gap)
+    const carrierDist = len;
+    const targetDist = Math.max(0, carrierDist - GAP_DISTANCE);
+
+    // FINAL LOCKED POSITION ON THE LINE
+    const tx = gx + ux * targetDist;
+    const ty = gy + uy * targetDist;
+
+    return {
+        tx,
+        ty,
+
+        // Always face the puck
+        lookX: carrier.x,
+        lookY: carrier.y,
+
+        brake: false,
+        action: "none"
+    };
+}
+
+
+
+
+
+
+// =========================================================
+// LAST MAN STANDING (The "Tennis Baseline" Logic)
+// =========================================================
+
+function amILastMan(p) {
+    const myGoalX = (p.team === 0) ? goal1 : goal2;
+    const myDist = Math.abs(p.x - myGoalX);
+
+    for (const mate of players) {
+        if (mate.team !== p.team || mate.id === p.id || mate.type !== "skater") continue;
+        
+        const dist = Math.abs(mate.x - myGoalX);
+        
+        // If a teammate is deeper (closer to goal) than me, I am NOT last man.
+        // (We use < instead of <= so if we are parallel, we BOTH act safe)
+        if (dist < myDist) return false;
+    }
+    
+    return true;
+}
+
+function getLastManSafetyTarget(p) {
+    const myGoalX = (p.team === 0) ? goal1 : goal2;
+    const myGoalY = RY; // Center of net
+    
+    // Attack Dir: 1 if we attack Right (My Goal is Left), -1 if we attack Left
+    const attackDir = (myGoalX < 500) ? 1 : -1;
+    
+    // 1. Find the Deepest Threat (Opponent closest to MY goal)
+    let closestDist = 9999;
+    let dangerOpp = null;
+    
+    for (const o of players) {
+        if (o.team === p.team) continue;
+        
+        const d = Math.abs(o.x - myGoalX);
+        if (d < closestDist) {
+            closestDist = d;
+            dangerOpp = o;
+        }
+    }
+    
+    // Default behavior if no enemies found
+    if (!dangerOpp) {
+        return { tx: myGoalX + (attackDir * 150), ty: RY, action: "none" };
+    }
+
+    // 2. CALCULATE SAFETY DEPTH (X-AXIS)
+    // We strictly enforce the 160px buffer.
+    const buffer = 180;
+    let targetX = dangerOpp.x - (attackDir * buffer);
+
+    // Clamp: Don't back up into our own goalie (40px minimum gap)
+    const minGap = 120; 
+    if (attackDir === 1) { // Goal is Left (< 500)
+        if (targetX < myGoalX + minGap) targetX = myGoalX + minGap;
+    } else { // Goal is Right (> 500)
+        if (targetX > myGoalX - minGap) targetX = myGoalX - minGap;
+    }
+  
+    
+    // Total X distance from Opponent to Net
+    const totalDistX = myGoalX - dangerOpp.x;
+    
+    // Distance from Opponent to Me (TargetX)
+    const myDistX = targetX - dangerOpp.x;
+    
+    // Avoid division by zero
+    if (Math.abs(totalDistX) < 1) {
+        return { tx: targetX, ty: RY, action: "none" };
+    }
+
+    // Linear Interpolation Ratio (0.0 = At Opponent, 1.0 = At Net)
+    const ratio = myDistX / totalDistX;
+    
+    // Calculate Y based on that ratio
+    // If Opponent is wide, this pulls us slightly wide to block the lane,
+    // but keeps us central enough because we are deeper.
+    let targetY = dangerOpp.y + (myGoalY - dangerOpp.y) * ratio;
+
+    // Safety Clamp Y (Keep slightly off the boards)
+    // Rink Y is approx 150 (top) to 450 (bottom)
+    targetY = Math.max(160, Math.min(440, targetY));
+
+    return { tx: targetX, ty: targetY, action: "none" };
+}
+
+
+
+
+
+
+function evaluateShot(p) {
+    const goalX = (p.team === 0) ? goal2 : goal1;
+    const goalY = RY; // Aim center
+    
+    const dx = goalX - p.x;
+    const dy = goalY - p.y;
+    const dist = Math.hypot(dx, dy);
+
+    // 1. Range Check
+    if (dist > 210) return { good: false, x: goalX, y: goalY };
+
+    // 2. Angle Check (Don't shoot from bad angles)
+    const angle = Math.atan2(dy, dx);
+    let diff = Math.abs(normalizeAngle(angle - p.angle));
+    if (diff > 2.0) return { good: false, x: goalX, y: goalY };
+
+    // 3. Block Check
+    if (isLaneBlocked(p.x, p.y, goalX, goalY, p.team)) {
+        return { good: false, x: goalX, y: goalY };
+    }
+
+    return { good: true, x: goalX, y: goalY };
+}
+
+
+
+
+function findSmartPass(p, bb) {
+    // Used by Team 1 (Behavior Tree)
+    let best = null;
+    let bestScore = -999;
+
+    const skaters = players.filter(mate => mate.team === p.team && mate.id !== p.id && mate.type === "skater");
+    // If BB exists, use its data, otherwise infer direction
+    const forwardDir = (bb && bb.attackingRight) ? 1 : ((p.x < RX) ? 1 : -1);
+    const enemyGoal = (bb) ? bb.enemyGoal : ((p.team === 0) ? goal2 : goal1);
+
+    for (const mate of skaters) {
+        // Rule: Don't pass backward into defensive zone unless necessary
+        const isForwardPass = (mate.x - p.x) * forwardDir > 0;
+        
+        if (isLaneBlocked(p.x, p.y, mate.x, mate.y, p.team)) continue;
+
+        let score = 0;
+        const mateDistToGoal = Math.hypot(mate.x - enemyGoal, mate.y - RY);
+        score -= mateDistToGoal; 
+
+        let nearestEnemy = 999;
+        for (const o of players) {
+            if (o.team !== p.team) {
+                const d = Math.hypot(o.x - mate.x, o.y - mate.y);
+                if (d < nearestEnemy) nearestEnemy = d;
+            }
+        }
+        if (nearestEnemy < 60) score -= 1000; 
+        
+        if (score > bestScore) {
+            bestScore = score;
+            best = mate;
+        }
+    }
+    return best;
+}
+
+function evaluatePassOptions(p) {
+    // Used by Team 0 (Legacy logic)
+    const target = findSmartPass(p, null);
+    return { good: !!target, teammate: target };
+}
+
+function pickCarryLane(p) {
+    // Simple 3-lane logic
+    const goalX = (p.team === 0) ? goal2 : goal1;
+    const offsets = [-80, 0, 80];
+    let best = null;
+    let bestScore = -999;
+
+    for (let off of offsets) {
+        const ly = RY + off;
+        let score = 0;
+        for (const o of players) {
+            if (o.team === p.team) continue;
+            const d = pointLineDistance(p.x, p.y, goalX, ly, o.x, o.y);
+            score += Math.max(0, d - 30);
+        }
+        if (score > bestScore) { bestScore = score; best = { x: goalX, y: ly }; }
+    }
+    return best;
+}
+
+function openSpaceScore(x, y, team) {
+    let score = 0;
+    for (const o of players) {
+        if (o.team !== team) {
+            const d = Math.hypot(o.x - x, o.y - y);
+            if (d < 70) score -= (70 - d);
+        }
+    }
+    return score;
+}
+
+function getNetAvoidanceTarget(p, targetX, targetY) {
+    const leftNetX = Math.min(goal1, goal2);
+    const rightNetX = Math.max(goal1, goal2);
+    const avoidanceThreshold = 60; 
+    const waypointOffset = 100;
+
+    if (targetX < leftNetX && p.x > leftNetX) {
+        if (Math.abs(p.y - RY) < avoidanceThreshold) {
+            const goUp = (p.y < RY);
+            return { x: leftNetX - 30, y: goUp ? RY - waypointOffset : RY + waypointOffset };
+        }
+    }
+    if (targetX > rightNetX && p.x < rightNetX) {
+        if (Math.abs(p.y - RY) < avoidanceThreshold) {
+            const goUp = (p.y < RY);
+            return { x: rightNetX + 30, y: goUp ? RY - waypointOffset : RY + waypointOffset };
+        }
+    }
+    return { x: targetX, y: targetY };
+}
+
+
+
+function evadePressure(bb) {
+    let escapeX = 0, escapeY = 0, pressureCount = 0;
+    for (const o of players) {
+        if (o.team !== bb.p.team) {
+            const dist = Math.hypot(bb.p.x - o.x, bb.p.y - o.y);
+            if (dist < 100) {
+                const force = (80 - dist) / 100;
+                escapeX += ((bb.p.x - o.x) / dist) * force;
+                escapeY += ((bb.p.y - o.y) / dist) * force;
+                pressureCount++;
+            }
+        }
+    }
+    if (pressureCount === 0) return null;
+
+    // IMPROVED: Stronger/smarter open ice pull (test 5 candidates for wider vision)
+    const forwardDir = (bb.enemyGoal > bb.p.x) ? 1 : -1;
+    const candidates = [
+        { x: bb.p.x + forwardDir * 80, y: bb.p.y - 90 },  // Wider up
+        { x: bb.p.x + forwardDir * 80, y: bb.p.y - 45 },  // Slight up
+        { x: bb.p.x + forwardDir * 80, y: bb.p.y },       // Straight
+        { x: bb.p.x + forwardDir * 80, y: bb.p.y + 45 },  // Slight down
+        { x: bb.p.x + forwardDir * 80, y: bb.p.y + 90 }   // Wider down
+    ];
+    let bestCandidate = candidates[2];  // Default straight
+    let bestScore = -999;
+    for (const cand of candidates) {
+        const score = openSpaceScore(cand.x, cand.y, bb.p.team) + (forwardDir * (cand.x - bb.p.x) * 0.2);  // Bonus for forward progress
+        if (score > bestScore) {
+            bestScore = score;
+            bestCandidate = cand;
+        }
+    }
+    // Stronger pull to best open spot (safer path)
+    const openDX = bestCandidate.x - bb.p.x;
+    const openDY = bestCandidate.y - bb.p.y;
+    const openDist = Math.hypot(openDX, openDY);
+    if (openDist > 0) {
+        escapeX += (openDX / openDist) * 0.8;  // Bumped up for better open ice use
+        escapeY += (openDY / openDist) * 0.8;
+    }
+
+    const distFromCenter = bb.p.y - RY;
+    escapeY -= distFromCenter * 0.05;
+    const forwardNudge = forwardDir * 0.25;  // Slightly stronger forward bias
+    escapeX += forwardNudge;
+
+    const angle = Math.atan2(escapeY, escapeX);
+    const escapeDist = 90;
+    const tx = bb.p.x + Math.cos(angle) * escapeDist;
+    const ty = bb.p.y + Math.sin(angle) * escapeDist;
+
+    // NEW: Quick pass eval mid-evade (if escape spot opens a lane, pass for safety)
+    const passOption = findSmartPass(bb.p, bb);  // Your existing smart pass helper
+    if (passOption) {
+        const passTx = passOption.x + forwardDir * 20;  // Slight lead for safer pass
+        const passTy = passOption.y;
+        if (!isLaneBlocked(bb.p.x, bb.p.y, passTx, passTy, bb.p.team)) {
+            return { tx: passTx, ty: passTy, action: "pass", target: passOption };
+        }
+    }
+
+    return { tx, ty, action: "none" };
+}
+
+
+
+function hoverDynamicLine(bb) {
+
+    const defendingRight = (bb.myGoalX > RX);
+    const me = bb.p;
+
+    // Find deepest OTHER skater toward OUR own end
+    let deepest = null;
+
+    for (const pl of players) {
+        if (pl.type !== "skater") continue;
+        if (pl.id === me.id) continue; // <<< IMPORTANT FIX
+
+        if (!deepest) {
+            deepest = pl;
+            continue;
+        }
+
+        if (defendingRight) {
+            if (pl.x > deepest.x) deepest = pl;
+        } else {
+            if (pl.x < deepest.x) deepest = pl;
+        }
+    }
+
+    if (!deepest) {
+        return { tx: me.x, ty: me.y, action: "none" };
+    }
+
+    const gap = 80;
+    const rawX = defendingRight ? (deepest.x + gap) : (deepest.x - gap);
+
+    // Don't let him drift behind the net
+    const netBuffer = 40;
+    const safeMinX = Math.min(goal1, goal2) + netBuffer;
+    const safeMaxX = Math.max(goal1, goal2) - netBuffer;
+
+    const targetX = Math.max(safeMinX, Math.min(safeMaxX, rawX));
+
+    // Mild vertical tracking toward puck
+    const targetY = RY + (puck.y - RY) * 0.35;
+
+    return { tx: targetX, ty: targetY, action: "none" };
+}
+
+
+
+
+function applyEvasion(p, targetX, targetY) {
+    // 1. Safety Check
+    if (puck.ownerId !== p.id) return { x: targetX, y: targetY };
+
+    let avoidX = 0;
+    let avoidY = 0;
+    let threatCount = 0;
+
+    // 2. Scan for threats
+    for (const o of players) {
+        if (o.team === p.team) continue; // Ignore teammates
+
+        const dx = p.x - o.x;
+        const dy = p.y - o.y;
+        const dist = Math.hypot(dx, dy);
+
+        // Danger Zone: 70px (Slightly larger to allow smooth steering)
+        if (dist < 70) {
+            // Calculate repulsion force (0.0 to 1.0)
+            const force = (70 - dist) / 70;
+
+            // --- THE LATERAL BIAS FIX ---
+            // If the opponent is mostly Horizontal to us (Blocking the lane),
+            // we want to dodge Vertically (East/West), not backwards.
+            
+            // Check if threat is "In Front/Behind" vs "Beside"
+            const isHorizontalThreat = Math.abs(dx) > Math.abs(dy);
+
+            if (isHorizontalThreat) {
+                // THREAT IS BLOCKING THE LANE:
+                // Apply strict Lateral Force (Y-axis push).
+                // We use our current Y velocity to decide which way to 'flow'
+                // If we are already drifting Up, dodge Up. If Down, dodge Down.
+                const dodgeDir = (p.vy > 0) ? 1 : -1; 
+                
+                // Strong lateral push (160px), weak backward push (20px)
+                avoidX += (dx / dist) * force * 20;  
+                avoidY += dodgeDir * force * 160;   
+            } 
+            else {
+                // THREAT IS TO THE SIDE:
+                // Just push away normally so we don't get hooked
+                avoidX += (dx / dist) * force * 80;
+                avoidY += (dy / dist) * force * 80;
+            }
+
+            threatCount++;
+        }
+    }
+
+    if (threatCount > 0) {
+        // 3. Apply to Local Waypoint (The "Local Steering" Logic)
+        const toGoalX = targetX - p.x;
+        const toGoalY = targetY - p.y;
+        const goalDist = Math.hypot(toGoalX, toGoalY);
+
+        if (!isFinite(goalDist) || goalDist < 0.001) {
+            return { x: targetX, y: targetY };
+        }
+
+        // Create a local target 100px ahead, then apply the dodge
+        const lookAhead = 100;
+        const localTx = (toGoalX / goalDist) * lookAhead;
+        const localTy = (toGoalY / goalDist) * lookAhead;
+
+        return { 
+            x: p.x + localTx + avoidX, 
+            y: p.y + localTy + avoidY 
+        };
+    }
+
+    // No threats? Return original target
+    return { x: targetX, y: targetY };
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// =========================================================
+// PREVENTIVE OFFSIDE CHECK FOR AI (Universal)
+// =========================================================
+function wouldBeOffside(p) {
+    // Blue lines
+    const leftLine  = RX - BLUE_LINE_OFFSET;
+    const rightLine = RX + BLUE_LINE_OFFSET;
+
+    const puckX = puck.x;
+    const meX   = p.x;
+
+    // TEAM 0 → direction depends on team0AttacksRight
+    if (p.team === 0) {
+        if (team0AttacksRight) {
+            // Attacking RIGHT: puck must cross rightLine before skater
+            const puckIn = puckX > rightLine;
+            const meIn   = meX > rightLine;
+            if (!puckIn && meIn) return true;   // entering early
+        } else {
+            // Attacking LEFT
+            const puckIn = puckX < leftLine;
+            const meIn   = meX < leftLine;
+            if (!puckIn && meIn) return true;
+        }
+    }
+
+    // TEAM 1 → opposite direction
+    else {
+        const team1AttacksRight = !team0AttacksRight;
+
+        if (team1AttacksRight) {
+            // Team 1 attacking RIGHT
+            const puckIn = puckX > rightLine;
+            const meIn   = meX > rightLine;
+            if (!puckIn && meIn) return true;
+        } else {
+            // Team 1 attacking LEFT
+            const puckIn = puckX < leftLine;
+            const meIn   = meX < leftLine;
+            if (!puckIn && meIn) return true;
+        }
+    }
+
+    return false;
+}
+
+
+
+
+// ==========================================
+// OFFSIDE LOGIC
+// ==========================================
+
+
+
+
+function checkOffsides() {
+    // 1. If play is stopped, reset logic
+    if (isResetActive()) {
+        offsideState.active = false;
+        offsideState.team = null;
+        return;
+    }
+
+    // 2. Identify Zones
+    // Blue lines are at RX - 110 (Left) and RX + 110 (Right)
+    const leftLine = RX - BLUE_LINE_OFFSET;
+    const rightLine = RX + BLUE_LINE_OFFSET;
+
+    // 3. Track Puck Crossing
+    // We need to know if the puck *just* entered a zone.
+    // (We rely on puck.prevX which we will set in the main loop)
+    const p = puck;
+    if (p.prevX === undefined) p.prevX = p.x;
+
+    // --- CHECKING TEAM 0 (Attacking Right -> Crosses Right Line) ---
+    if (team0AttacksRight) {
+        // Did puck just cross the Right Blue Line?
+        if (p.prevX <= rightLine && p.x > rightLine) {
+            // Check for premature attackers
+            let early = false;
+            const carrierId = p.ownerId; // Get ID of who has it (if anyone)
+            for (const pl of players) {
+                if (pl.id === carrierId) continue;
+                if (pl.team === 0 && pl.x > rightLine + 5) { // +5 buffer
+                    early = true; 
+                    break;
+                }
+            }
+            if (early && p.ownerId !== null && getPlayerById(p.ownerId).team === 0) {
+                 // Carrier carried it in offside -> Whistle immediately
+                 whistle("OFFSIDE");
+            } else if (early) {
+                // Dumped in -> Delayed
+                offsideState.active = true;
+                offsideState.team = 0;
+            }
+        }
+    } else {
+        // Team 0 Attacking Left (Crosses Left Line)
+        if (p.prevX >= leftLine && p.x < leftLine) {
+            let early = false;
+            for (const pl of players) {
+                if (pl.team === 0 && pl.x < leftLine - 5) {
+                    early = true; break;
+                }
+            }
+            if (early && p.ownerId !== null && getPlayerById(p.ownerId).team === 0) {
+                 whistle("OFFSIDE");
+            } else if (early) {
+                offsideState.active = true;
+                offsideState.team = 0;
+            }
+        }
+    }
+
+    // --- CHECKING TEAM 1 (Attacking Left -> Crosses Left Line) ---
+    // (Assumes Team 1 starts attacking Left)
+    const t1AttacksRight = !team0AttacksRight; 
+    
+    if (!t1AttacksRight) { // Standard Team 1 (Right to Left)
+         if (p.prevX >= leftLine && p.x < leftLine) {
+            let early = false;
+            const carrierId = p.ownerId; // Get ID of who has it (if anyone)
+            for (const pl of players) {
+                if (pl.id === carrierId) continue;
+                if (pl.team === 1 && pl.x < leftLine - 5) {
+                    early = true; break;
+                }
+            }
+            if (early && p.ownerId !== null && getPlayerById(p.ownerId).team === 1) {
+                 whistle("OFFSIDE! (Team 1)");
+            } else if (early) {
+                offsideState.active = true;
+                offsideState.team = 1;
+            }
+        }
+    } else {
+        // Team 1 Attacking Right
+         if (p.prevX <= rightLine && p.x > rightLine) {
+            let early = false;
+            for (const pl of players) {
+                if (pl.team === 1 && pl.x > rightLine + 5) {
+                    early = true; break;
+                }
+            }
+            if (early && p.ownerId !== null && getPlayerById(p.ownerId).team === 1) {
+                 whistle("OFFSIDE! (Team 1)");
+            } else if (early) {
+                offsideState.active = true;
+                offsideState.team = 1;
+            }
+        }
+    }
+
+    // 4. HANDLE DELAYED STATE
+    if (offsideState.active) {
+        const offTeam = offsideState.team;
+        const lineX = (team0AttacksRight && offTeam === 0) || (!team0AttacksRight && offTeam === 1) 
+                      ? rightLine : leftLine;
+        
+        // A. CHECK FOR TOUCH (WHISTLE)
+        if (puck.ownerId !== null) {
+            const owner = getPlayerById(puck.ownerId);
+            if (owner.team === offTeam) {
+                whistle(`OFFSIDE`);
+                offsideState.active = false;
+                return;
+            }
+        }
+
+        // B. CHECK FOR TAG UP (CLEAR)
+        // If all players on offside team are OUT of the zone, clear it.
+        let allClear = true;
+        for (const pl of players) {
+            if (pl.team === offTeam) {
+                // If attacking right, must be < line. If left, must be > line.
+                const isDeep = (team0AttacksRight && offTeam === 0) || (!team0AttacksRight && offTeam === 1)
+                               ? (pl.x > lineX) : (pl.x < lineX);
+                if (isDeep) {
+                    allClear = false;
+                    break;
+                }
+            }
+        }
+        
+        // Also clear if puck leaves zone
+        const puckOut = (team0AttacksRight && offTeam === 0) || (!team0AttacksRight && offTeam === 1)
+                        ? (p.x < lineX) : (p.x > lineX);
+
+        if (allClear || puckOut) {
+            offsideState.active = false;
+            offsideState.team = null;
+        }
+    }
+
+    // Update Previous X
+    p.prevX = p.x;
+}
+
+
+
+// ==========================================
+// SOLID GOAL PHYSICS (The "Brick Wall" Fix)
+// ==========================================
+
+const GOAL_WALLS = [];
+
+function buildSolidGoals() {
+    GOAL_WALLS.length = 0; // Clear existing
+
+    const depth = 23;    // How deep the net is
+    const thickness = 2; // How thick the walls are (Prevent tunneling)
+    const openingHalf = (typeof NET_H !== 'undefined' ? NET_H / 2 : 23);
+    
+    // Y Coordinates for posts
+    const topPost = RY - openingHalf;
+    const botPost = RY + openingHalf;
+
+    // --- LEFT GOAL (Goal 1) ---
+    // Opening is at x = goal1. Back is to the left.
+    
+    // 1. Back Wall (Vertical block)
+    GOAL_WALLS.push({
+        x: goal1 - depth - thickness, 
+        y: topPost - thickness,
+        w: thickness, 
+        h: (botPost - topPost) + (thickness * 2),
+        type: "back"
+    });
+
+    // 2. Top Side (Horizontal block)
+    GOAL_WALLS.push({
+        x: goal1 - depth,
+        y: topPost - thickness,
+        w: depth, // Reaches to the goal line
+        h: thickness,
+        type: "side"
+    });
+
+    // 3. Bottom Side (Horizontal block)
+    GOAL_WALLS.push({
+        x: goal1 - depth,
+        y: botPost,
+        w: depth,
+        h: thickness,
+        type: "side"
+    });
+
+    // --- RIGHT GOAL (Goal 2) ---
+    // Opening is at x = goal2. Back is to the right.
+
+    // 1. Back Wall
+    GOAL_WALLS.push({
+        x: goal2 + depth,
+        y: topPost - thickness,
+        w: thickness,
+        h: (botPost - topPost) + (thickness * 2),
+        type: "back"
+    });
+
+    // 2. Top Side
+    GOAL_WALLS.push({
+        x: goal2, // Starts at goal line
+        y: topPost - thickness,
+        w: depth,
+        h: thickness,
+        type: "side"
+    });
+
+    // 3. Bottom Side
+    GOAL_WALLS.push({
+        x: goal2,
+        y: botPost,
+        w: depth,
+        h: thickness,
+        type: "side"
+    });
+}
+
+
+
+
+function resolveGoalCollisions(p) {
+    let hit = false;
+    const r = p.r || p.size / 2;
+
+    for (const wall of GOAL_WALLS) {
+        const closestX = clamp(p.x, wall.x, wall.x + wall.w);
+        const closestY = clamp(p.y, wall.y, wall.y + wall.h);
+        const dx = p.x - closestX;
+        const dy = p.y - closestY;
+        const distSq = dx * dx + dy * dy;
+
+        if (distSq < r * r) {
+            const dist = Math.sqrt(distSq) || 0.001;
+            
+            // Normal direction
+            let nx = dx / dist;
+            let ny = dy / dist;
+
+            // Fallback for tunneling (rare)
+            if (dist < 0.001) {
+                const distLeft = Math.abs(p.x - wall.x);
+                const distRight = Math.abs(p.x - (wall.x + wall.w));
+                const distTop = Math.abs(p.y - wall.y);
+                const distBot = Math.abs(p.y - (wall.y + wall.h));
+                const minX = Math.min(distLeft, distRight);
+                const minY = Math.min(distTop, distBot);
+                if (minX < minY) {
+                    nx = (distLeft < distRight) ? -1 : 1; ny = 0;
+                } else {
+                    nx = 0; ny = (distTop < distBot) ? -1 : 1;
+                }
+            }
+
+            // Push out
+            const overlap = r - dist;
+            p.x += nx * overlap;
+            p.y += ny * overlap;
+
+            // --- NEW SOFT NET PHYSICS ---
+            
+            // 0.1 = Dead bounce (Back of net)
+            // 0.3 = Dull thud (Side of net)
+            // (Standard wall was effectively 1.0)
+            const restitution = (wall.type === "back") ? 0.1 : 0.3;
+
+            // Apply reflection: V_new = V_old - (1 + e) * (V . N) * N
+            const dot = p.vx * nx + p.vy * ny;
+            
+            // Only reflect if moving TOWARD the wall
+            if (dot < 0) {
+                p.vx -= (1 + restitution) * dot * nx;
+                p.vy -= (1 + restitution) * dot * ny;
+            }
+
+            // High Friction (Mesh catches the puck)
+            p.vx *= 0.6;
+            p.vy *= 0.6;
+
+            hit = true;
+        }
+    }
+    return hit;
+}
+
+
+
+// ==========================================
+// PLAYER-ONLY GOAL BLOCKS (Simple Box Prevents Entering Net)
+// ==========================================
+
+const GOAL_BLOCKS = [];
+
+function buildGoalBlocksForPlayers() {
+    GOAL_BLOCKS.length = 0;
+
+    const depth = 28;         // how far box extends behind the goal line
+
+    // We use NET_H + 15 to ensure the "box" fully covers the visual posts
+    const height = (typeof NET_H !== 'undefined' ? NET_H + 15 : 60);
+    
+    const half = height / 2;
+
+    const top = RY - half;
+    const bot = RY + half;
+
+    // LEFT GOAL
+    GOAL_BLOCKS.push({
+        x: goal1 - depth,
+        y: top,
+        w: depth,
+        h: height
+    });
+
+    // RIGHT GOAL
+    GOAL_BLOCKS.push({
+        x: goal2,
+        y: top,
+        w: depth,
+        h: height
+    });
+}
+
+function blockPlayerFromGoal(p) {
+    const r = p.size / 2;
+
+    for (const g of GOAL_BLOCKS) {
+
+        const closestX = clamp(p.x, g.x, g.x + g.w);
+        const closestY = clamp(p.y, g.y, g.y + g.h);
+
+        const dx = p.x - closestX;
+        const dy = p.y - closestY;
+        const distSq = dx*dx + dy*dy;
+
+        if (distSq < r*r) {
+            const dist = Math.sqrt(distSq) || 0.001;
+            const nx = dx / dist;   // normal X
+            const ny = dy / dist;   // normal Y
+            const overlap = r - dist;
+
+            // --- PUSH OUT ---
+            p.x += nx * overlap;
+            p.y += ny * overlap;
+
+            // --- SLIDE (Reflect only normal component) ---
+            const dot = p.vx * nx + p.vy * ny;    // component along the normal
+
+            // Remove *only* the inward velocity
+            if (dot < 0) {
+                p.vx -= dot * nx;   // subtract normal direction
+                p.vy -= dot * ny;
+            }
+
+            // Light friction so they don't bounce forever
+            p.vx *= 0.99;
+            p.vy *= 0.99;
+        }
+    }
+}
+
+
+
+
+function debugDrawGoalBlocks(ctx) {
+    ctx.save();
+    ctx.globalAlpha = 0.6;
+    ctx.fillStyle = "red";
+
+    for (const g of GOAL_BLOCKS) {
+        ctx.fillRect(g.x, g.y, g.w, g.h);
+    }
+
+    ctx.restore();
+}
+
+
+
+
+function redirectShotBehindNet(p) {
+
+    // Calculate shot direction
+    const aimX = Math.cos(p.angle);
+    const aimY = Math.sin(p.angle);
+
+    let attackingRight = (p.team === 0);
+
+    // Player behind the left net (attacking right)
+    if (attackingRight) {
+        if (p.x < goal1 + 5 && aimX > 0) {
+            // If shot is almost horizontal, force upward
+            if (Math.abs(aimY) < 0.2) {
+                return { x: p.x, y: p.y - 300 };
+            }
+            // Otherwise, keep their vertical bias
+            return { x: p.x, y: p.y + (aimY < 0 ? -300 : 300) };
+        }
+    }
+
+    // Player behind the right net (attacking left)
+    else {
+        if (p.x > goal2 - 5 && aimX < 0) {
+            if (Math.abs(aimY) < 0.2) {
+                return { x: p.x, y: p.y - 300 };
+            }
+            return { x: p.x, y: p.y + (aimY < 0 ? -300 : 300) };
+        }
+    }
+
+    return null;
+}
+
+
+
+
+// =========================================================
+// BEHIND-NET ESCAPE MODE (Behavior, NOT Pathfinding)
+// =========================================================
+function behindNetEscape(p, tx, ty) {
+
+    // 1. Determine if *puck* is behind either net
+    const puckBehindLeft  = (puck.x < goal1 - 20);
+    const puckBehindRight = (puck.x > goal2 + 20);
+    const puckBehindNet   = puckBehindLeft || puckBehindRight;
+
+    // If puck is behind the net, behave normally
+    if (puckBehindNet) {
+        return { x: tx, y: ty };
+    }
+
+    // 2. Determine if *player* is behind the net
+    const trapY = 80;
+    const playerBehindLeft  = (p.x < goal1 - 20)  && (Math.abs(p.y - RY) < trapY);
+    const playerBehindRight = (p.x > goal2 + 20)  && (Math.abs(p.y - RY) < trapY);
+
+    const inTrap = playerBehindLeft || playerBehindRight;
+
+    if (!inTrap) {
+        // Not stuck behind net → normal
+        return { x: tx, y: ty };
+    }
+
+    // 3. Player is behind net AND puck is not behind net → escape mode
+    // Escape direction is chosen simply:
+    const escapeUp = (p.y < RY);
+    const escapeSpeed = escapeUp ? -100 : 100;
+
+    // Maintain original X-target,
+    // but force a strong vertical bias until escaping trapY region.
+    const newTy = p.y + escapeSpeed;
+
+    return { x: tx, y: newTy };
+}
+
+
+
+
+function offensiveZoneAllowed(p) {
+    const blueLeft  = RX - BLUE_LINE_OFFSET;
+    const blueRight = RX + BLUE_LINE_OFFSET;
+
+    let attackingRight;
+
+    if (p.team === 0) attackingRight = team0AttacksRight;
+    else             attackingRight = !team0AttacksRight;
+
+    const puckX = puck.x;
+
+    if (attackingRight) {
+        return (puckX > blueRight);   // puck already in O-zone?
+    } else {
+        return (puckX < blueLeft);
+    }
+}
+
+
+
+// =========================================================
+// SHARED BLACKBOARD BUILDER (Fixed Direction Logic)
+// =========================================================
+function makeBB(p) {
+    // 1. SAFE GLOBALS
+    const safeRX = (typeof RX !== 'undefined') ? RX : 500;
+    const safeRY = (typeof RY !== 'undefined') ? RY : 300;
+    
+    // Get raw goal values (These swap physically in the main file)
+    // goal1 = Team 0's Net, goal2 = Team 1's Net
+    const g1 = (typeof goal1 !== 'undefined') ? goal1 : 175;
+    const g2 = (typeof goal2 !== 'undefined') ? goal2 : 825;
+
+    // 2. GEOMETRIC LOCK
+    const physicalLeftGoal = Math.min(g1, g2);
+    const physicalRightGoal = Math.max(g1, g2);
+
+    // 3. DETECT ATTACK DIRECTION (THE FIX)
+    // Instead of trusting a global flag, we check the geometry.
+    // If Team 0's goal (g1) is on the Left, they Attack Right.
+    // If Team 0's goal (g1) is on the Right, they Attack Left.
+    const team0AttacksRight = (g1 < g2);
+    
+    let attackingRight = true;
+    if (p.team === 0) {
+        attackingRight = team0AttacksRight;
+    } else {
+        attackingRight = !team0AttacksRight;
+    }
+    
+    // 4. ASSIGN TARGETS
+    const enemyGoal = attackingRight ? physicalRightGoal : physicalLeftGoal;
+    const myGoalX   = attackingRight ? physicalLeftGoal  : physicalRightGoal;
+    
+    // Forward Dir is now guaranteed to match the physical rink
+    const forwardDir = attackingRight ? 1 : -1;
+
+    // 5. STANDARD MATH
+    const carrier = getPlayerById(puck.ownerId);
+    
+    const blueLineOffset = 110; 
+    const farBlue = safeRX + (forwardDir * blueLineOffset);
+    const nearBlue = safeRX - (forwardDir * blueLineOffset);
+    
+    const puckInOffZone = (forwardDir === 1) ? (puck.x > farBlue) : (puck.x < farBlue);
+    const puckInDefZone = (forwardDir === 1) ? (puck.x < nearBlue) : (puck.x > nearBlue);
+    const puckInNeuZone = (!puckInOffZone && !puckInDefZone);
+
+    return {
+        p: p,
+        forwardDir: forwardDir,  
+        safeRX: safeRX,
+        myGoalX: myGoalX,
+        enemyGoal: enemyGoal,
+        hasPuck: (puck.ownerId === p.id),
+        loosePuck: (puck.ownerId === null),
+        oppHasPuck: (carrier && carrier.team !== p.team),
+        teamHasPuck: (carrier && carrier.team === p.team),
+        inShotRange: (Math.hypot(enemyGoal - p.x, safeRY - p.y) < 150),
+        puckInDefZone: puckInDefZone,
+        puckInOffZone: puckInOffZone,
+        puckInNeuZone: puckInNeuZone,
+        interceptPoint: { x: puck.x, y: puck.y }, 
+        carryTarget: null, 
+        passTarget: null
+    };
+}
+
+// =========================================================
+// FORMATION ZONES
+// =========================================================
+function getFormationZone(puckX, team) {
+    let attackingRight = true;
+    if (typeof team0AttacksRight !== 'undefined') {
+        attackingRight = (team === 0) ? team0AttacksRight : !team0AttacksRight;
+    } else {
+        attackingRight = (team === 0);
+    }
+    
+    const forwardDir = attackingRight ? 1 : -1;
+    const RX_CENTER = 500; 
+    const D_LINE = RX_CENTER - (forwardDir * 110);
+    const O_LINE = RX_CENTER + (forwardDir * 110);
+    const D_DEEP = RX_CENTER - (forwardDir * 250);
+    
+    if (forwardDir === 1) { // Attacking RIGHT
+        if (puckX < D_DEEP) return 1;
+        if (puckX < D_LINE) return 2;
+        if (puckX < RX_CENTER) return 3;
+        if (puckX < O_LINE) return 4;
+        if (puckX < O_LINE + 150) return 5;
+        return 6;
+    } else { // Attacking LEFT
+        if (puckX > D_DEEP) return 1;
+        if (puckX > D_LINE) return 2;
+        if (puckX > RX_CENTER) return 3;
+        if (puckX > O_LINE) return 4;
+        if (puckX > O_LINE - 150) return 5;
+        return 6;
+    }
+}
+
+
+
+
+
+function executeTacticalKeepAway(p, bb, params) {
+    const minVacuum = Number(params.minVacuum || 0); // Threshold of allowed enemies in vacuum
+    let bestTeammate = null;
+    let maxOpenness = -1;
+
+    // Filter all teammates using the intel already attached to them
+    const candidates = players.filter(m => 
+        m.team === p.team && 
+        m.id !== p.id && 
+        m.type === 'skater' &&
+        m.intel_isPassable === true &&         // Path already verified clear
+        m.intel_vacuumCount <= minVacuum       // Vacuum already verified clean
+    );
+
+    for (let m of candidates) {
+        // Find the one with the best openness score (calculated in GetInfo)
+        if (m.intel_opennessScore > maxOpenness) {
+            maxOpenness = m.intel_opennessScore;
+            bestTeammate = m;
+        }
+    }
+
+    if (bestTeammate) {
+        return {
+            tx: bestTeammate.intel_leadX, 
+            ty: bestTeammate.intel_leadY, 
+            action: "pass", 
+            target: bestTeammate
+        };
+    }
+
+    return null;
+}
+
+
+// Converts 0-1000 (Canvas) to -500 to 500 (Human)
+function toRelX(canvasX) { return Math.round(canvasX - 500); }
+
+// Converts 0-600 (Canvas) to -300 to 300 (Human)
+function toRelY(canvasY) { return Math.round(canvasY - 300); }

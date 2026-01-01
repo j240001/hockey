@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tournament Monitor</title>
+    <style>
+        body { background: #1a1b26; color: #c0caf5; font-family: 'Segoe UI', monospace; margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
+        canvas { background: #16161e; border: 1px solid #444; box-shadow: 0 0 30px rgba(0,0,0,0.5); border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <canvas id="standingsCanvas" width="1100" height="800"></canvas>
+
+    <script>
+        const canvas = document.getElementById('standingsCanvas');
+        const ctx = canvas.getContext('2d');
+        let gameLog = []; 
+        let totalGamesInTournament = 0;
+        let gamesCompleted = 0;
+
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'TOURNAMENT_STANDINGS_DATA') {
+                const packet = JSON.parse(e.newValue);
+                
+                // Update log
+                if (packet.lastGame) {
+                    gameLog.unshift(packet.lastGame); 
+                    if (gameLog.length > 30) gameLog.pop();
+                }
+
+                // Update progress stats
+                gamesCompleted = packet.currentIndex || 0;
+                totalGamesInTournament = packet.totalMatches || 0;
+
+                render(packet.standings);
+            }
+        });
+
+        function render(standings) {
+            if (!standings) return;
+
+            // 1. FULL WIPE
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "#16161e";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 2. COLUMN MAP: Adjust these X-values to move data left or right
+            const col = {
+                team: 40,
+                gp:   95,
+                w:    135,
+                l:    165,
+                otl:  195,
+                pts:  235,
+                gf:   280,
+                ga:   320,
+                diff: 375, // The +/- column
+                sfg:  435, // Shooting For
+                sag:  495  // Shooting Against
+            };
+
+            // 3. DRAW HEADER (Matches the column map above)
+            ctx.font = "bold 14px monospace";
+            ctx.fillStyle = "#565f89";
+            ctx.fillText("TEAM  GP   W   L  OTL  PTS   GF   GA    +/-    SF/G  SA/G", col.team, 40);
+
+            const teams = Object.values(standings).sort((a,b) => b.Pts - a.Pts);
+            let y = 75;
+
+            // 4. DRAW DATA ROWS
+            teams.forEach((t) => {
+                const gp = t.GP || 0;
+                const diff = (t.GF || 0) - (t.GA || 0);
+                const sfg = gp > 0 ? (t.totalSOGF / gp).toFixed(1) : "0.0";
+                const sag = gp > 0 ? (t.totalSOGA / gp).toFixed(1) : "0.0";
+
+                // Row Color
+                ctx.fillStyle = (t.code === "EDM") ? "#ff9d00" : "#c0caf5";
+                ctx.font = "bold 14px monospace";
+
+                // Standard Stats
+                ctx.fillText((t.code || "???"), col.team, y);
+                ctx.fillText(gp.toString(),    col.gp,   y);
+                ctx.fillText((t.W || 0),       col.w,    y);
+                ctx.fillText((t.L || 0),       col.l,    y);
+                ctx.fillText((t.OTL || 0),     col.otl,  y);
+                ctx.fillText((t.Pts || 0),     col.pts,  y);
+                ctx.fillText((t.GF || 0),      col.gf,   y);
+                ctx.fillText((t.GA || 0),      col.ga,   y);
+
+                // +/- Color Logic
+                ctx.fillStyle = diff > 0 ? "#9ece6a" : (diff < 0 ? "#f7768e" : "#c0caf5");
+                ctx.fillText((diff > 0 ? "+" + diff : diff), col.diff, y);
+
+                // Shooting Stats
+                ctx.fillStyle = "#c0caf5";
+                ctx.fillText(sfg, col.sfg, y);
+                ctx.fillText(sag, col.sag, y);
+
+                // Grid Line
+                ctx.strokeStyle = "#24283b";
+                ctx.beginPath(); 
+                ctx.moveTo(col.team, y + 8); 
+                ctx.lineTo(col.sag + 40, y + 8); 
+                ctx.stroke();
+
+                y += 24;
+            });
+
+            renderLog();
+            renderStatusBar();
+        }
+
+
+
+
+        function renderLog() {
+            const logX = 680;
+            ctx.fillStyle = "#7aa2f7";
+            ctx.font = "bold 14px monospace";
+            ctx.fillText("RECENT RESULTS (LAST 30)", logX, 40);
+            
+            let logY = 75;
+            gameLog.forEach((g, i) => {
+                const isWin = g.score0 > g.score1;
+                ctx.fillStyle = "#565f89";
+                ctx.font = "12px monospace";
+                ctx.fillText(`${(i+1).toString().padStart(2, '0')}.`, logX, logY);
+                
+                ctx.fillStyle = isWin ? "#9ece6a" : "#f7768e";
+                const resultLine = `${g.team0} ${g.score0} - ${g.score1} ${g.team1}`;
+                ctx.fillText(resultLine, logX + 30, logY);
+                
+                if (g.isOT) {
+                    ctx.fillStyle = "#bb9af7";
+                    ctx.fillText("(OT)", logX + 180, logY);
+                }
+                logY += 22;
+            });
+        }
+
+        function renderStatusBar() {
+            const barY = canvas.height - 30;
+            // Background bar
+            ctx.fillStyle = "#1a1b26";
+            ctx.fillRect(0, barY - 20, canvas.width, 50);
+            
+            // Text
+            ctx.fillStyle = "#565f89";
+            ctx.font = "12px monospace";
+            const progress = totalGamesInTournament > 0 ? ((gamesCompleted / totalGamesInTournament) * 100).toFixed(1) : 0;
+            ctx.fillText(`PROGRESS: ${gamesCompleted} / ${totalGamesInTournament} GAMES (${progress}%)`, 40, barY);
+            
+            // Visual Progress Line
+            ctx.strokeStyle = "#414868";
+            ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(40, barY + 10); ctx.lineTo(canvas.width - 40, barY + 10); ctx.stroke();
+            
+            ctx.strokeStyle = "#7aa2f7";
+            const fillWidth = (canvas.width - 80) * (progress / 100);
+            ctx.beginPath(); ctx.moveTo(40, barY + 10); ctx.lineTo(40 + fillWidth, barY + 10); ctx.stroke();
+        }
+
+    </script>
+</body>
+</html>

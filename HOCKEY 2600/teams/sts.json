@@ -1,0 +1,72 @@
+{
+  "name": "B31_Stable_Swarm",
+  "teamName": "Stability",
+  "code": "STB",
+  "colors": { "main": "#7aa2f7", "secondary": "#9ece6a" },
+  "c": [
+    { "type": "Selector", "cat": "struct", "children": [
+        { "type": "Sequence", "cat": "struct", "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "actSmartShoot", "cat": "act", "laneWidth": 15, "angleBuf": 10 },
+            { "type": "actDynamicCarry", "cat": "act" }
+        ]},
+        { "type": "Sequence", "cat": "struct", "children": [
+            { "type": "condPuckInOffZone", "cat": "cond" },
+            { "type": "actIntercept", "cat": "act" }
+        ]},
+        { "type": "actHoverDynamic", "cat": "act" }
+    ]}
+  ],
+  "lw": [
+    { "type": "Selector", "cat": "struct", "children": [
+        { "type": "Sequence", "cat": "struct", "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "actDynamicCarry", "cat": "act" }
+        ]},
+        { "type": "Sequence", "cat": "struct", "children": [
+            { "type": "condPuckInOffZone", "cat": "cond" },
+            { "type": "actGoBackdoor", "cat": "act" }
+        ]},
+        { "type": "actIntercept", "cat": "act" }
+    ]}
+  ],
+  "rw": [
+    { "type": "Selector", "cat": "struct", "children": [
+        { "type": "Sequence", "cat": "struct", "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "actDynamicCarry", "cat": "act" }
+        ]},
+        { "type": "Sequence", "cat": "struct", "children": [
+            { "type": "condPuckInOffZone", "cat": "cond" },
+            { "type": "actIntercept", "cat": "act" }
+        ]},
+        { "type": "actIntercept", "cat": "act" }
+    ]}
+  ],
+  "ld": [
+    { "type": "Selector", "cat": "struct", "children": [
+        { "type": "Sequence", "cat": "struct", "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "actClearPuck", "cat": "act" }
+        ]},
+        { "type": "Sequence", "cat": "struct", "children": [
+            { "type": "condPuckInDefZone", "cat": "cond" },
+            { "type": "actAggressiveGap", "cat": "act" }
+        ]},
+        { "type": "actHoverDynamic", "cat": "act" }
+    ]}
+  ],
+  "rd": [
+    { "type": "Selector", "cat": "struct", "children": [
+        { "type": "Sequence", "cat": "struct", "children": [
+            { "type": "condHasPuck", "cat": "cond" },
+            { "type": "actClearPuck", "cat": "act" }
+        ]},
+        { "type": "Sequence", "cat": "struct", "children": [
+            { "type": "condPuckInDefZone", "cat": "cond" },
+            { "type": "actAggressiveGap", "cat": "act" }
+        ]},
+        { "type": "actHoverDynamic", "cat": "act" }
+    ]}
+  ]
+}
