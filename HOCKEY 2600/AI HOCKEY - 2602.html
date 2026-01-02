@@ -37,6 +37,7 @@
 <script src="tournament.js"></script>
 <script src="ai_skating.js"></script>
 <script src="crowd_data.js"></script>
+<script src="playoffs.js"></script>
 
 <!-- TEAMS -->
 <script src="teams/bt1.js"></script>
@@ -790,14 +791,14 @@ function handleOptionsInput(e) {
 // =========================================================
 // GAME CLOCK AND SCORE GLOBALS
 // =========================================================
-const GAME_DURATION_SECONDS = 120; // seconds
+const GAME_DURATION_SECONDS = 180; // seconds
 let timeRemaining = GAME_DURATION_SECONDS;
 let lastGameTimeUpdate = performance.now();
 
 // MULTI-PERIOD SYSTEM
 let currentPeriod = 1;
 const TOTAL_PERIODS = 3;
-const PERIOD_LENGTH_SECONDS = 120; // same as GAME_DURATION_SECONDS
+const PERIOD_LENGTH_SECONDS = 180; // same as GAME_DURATION_SECONDS
 
 
 // ==========================================
@@ -1075,17 +1076,44 @@ document.addEventListener("keydown", e => {
 
 document.addEventListener("keydown", (e) => {
     if (e.key === 'w' || e.key === "W") {
-        // 1. If Tournament is running, toggle ITS watch mode
+        // 1. Tournament Warp
         if (gameState === 'tournament') {
             if (typeof Tournament !== 'undefined') {
                 Tournament.toggleWatchMode();
             }
             return;
         }
-
-        // 2. Otherwise toggle standard Training watch mode
+        // 2. Playoff Warp (NEW)
+        if (gameState === 'playoffs') {
+            if (typeof Playoffs !== 'undefined') {
+                Playoffs.toggleWatchMode();
+            }
+            return;
+        }
+        // 3. Training Warp
         WATCH_MODE = !WATCH_MODE;
-        // console.log("WATCH_MODE:", WATCH_MODE);
+    }
+});
+
+
+// ==========================================
+// PLAYOFF BRACKET CONTROLS
+// ==========================================
+document.addEventListener("keydown", (e) => {
+    // Only listen if we are actually looking at the bracket
+    if (gameState === "playoff_bracket") {
+        if (e.code === "Space" || e.key === " ") {
+            if (typeof Playoffs !== 'undefined') {
+                Playoffs.startNextGame();
+            }
+        }
+    }
+    // VIEW TOGGLE (Tab) - Only on Champion Screen or Bracket
+    if ((gameState === "champion_screen" || gameState === "playoff_bracket") && e.key === "Tab") {
+        e.preventDefault(); // Prevent browser tab navigation
+        if (typeof Playoffs !== 'undefined') {
+            Playoffs.toggleView();
+        }
     }
 });
 
@@ -2721,7 +2749,7 @@ function shootPuck(player, power, targetOverride) {
     // =========================================================
     // 7. THE SPREAD DIAL (SET TO 0 FOR DEAD ACCURACY)
     // =========================================================
-    const SPREAD_AMOUNT = 0.1; // 0 for perfect shooting // 0.4 is terrible 
+    const SPREAD_AMOUNT = 0.15; // 0 for perfect shooting // 0.4 is terrible 
     const randomError = (Math.random() - 0.5) * SPREAD_AMOUNT;
     const shotAngle = finalAngle + randomError;
 
@@ -4741,7 +4769,8 @@ function updateClock(now) {
     const isPaused =
         (goalResetTimer !== null && now < goalResetTimer) ||
         now < faceoffPauseUntil ||
-        gameState !== "playing" ||
+        // *** THE FIX: Allow 'playing' OR 'playoffs' ***
+        (gameState !== "playing" && gameState !== "playoffs") ||
         (typeof isReplaying !== 'undefined' && isReplaying);
 
     // Normal countdown
@@ -4765,19 +4794,20 @@ function updateClock(now) {
                 periodMessage = `End of ${otNum}${otNum === 1 ? 'st' : otNum === 2 ? 'nd' : otNum === 3 ? 'rd' : 'th'} OT Period`;
             }
 
-            // 2. Set timer and enter INTERMISSION state (Freezes gameplay)
+            // 2. Set timer and enter INTERMISSION state
             periodMessageUntil = performance.now() + 3000;
             gameState = "intermission";
 
-            // 3. Create a waiter to handle the Reset AFTER the message finishes
+            // 3. Reset logic
             const finalizePeriodChange = () => {
                 if (performance.now() >= periodMessageUntil) {
                     
                     // A. REGULATION PERIOD END
                     if (currentPeriod < TOTAL_PERIODS) {
                         currentPeriod++;
-                        startNextPeriod(); // Reset positions NOW
-                        gameState = "playing";
+                        startNextPeriod(); 
+                        // Resume correct state
+                        gameState = (typeof Playoffs !== 'undefined' && Playoffs.active) ? "playoffs" : "playing";
                     } 
                     // B. 3RD PERIOD / OT END
                     else {
@@ -4785,27 +4815,23 @@ function updateClock(now) {
                             // TIE -> Go to Next OT Period
                             currentPeriod++;
                             startNextPeriod();
-                            gameState = "playing";
+                            gameState = (typeof Playoffs !== 'undefined' && Playoffs.active) ? "playoffs" : "playing";
                         } else {
                             // NO TIE -> Game Over
                             gameState = "gameover";
-                            // console.log("Game Over – Final");
                         }
                     }
                 } else {
-                    // Keep checking
                     requestAnimationFrame(finalizePeriodChange);
                 }
             };
 
-            // Start waiting
             requestAnimationFrame(finalizePeriodChange);
         }
     }
 
     lastGameTimeUpdate = now;
 }
-
 
 
 
@@ -6229,27 +6255,48 @@ function generateCrowd(disappointment = 0) {
 
 let crowdFrameCounter = 0;
 
+// =========================================================
+// CROWD UPDATE (Time-Based to fix Speed)
+// =========================================================
+let lastCrowdUpdate = 0;
+
 function updateLivingCrowd() {
-    crowdFrameCounter++;
-    if (crowdFrameCounter % AMBIENT_SPEED !== 0) return;
+    const now = performance.now();
+    
+    // 1. THROTTLE: Only update every 120ms (approx 8 times a second)
+    // This locks the crowd animation speed to real time, not frame rate.
+    if (now - lastCrowdUpdate < 120) return;
+    
+    lastCrowdUpdate = now;
 
-    masterCrowd.forEach(fan => {
-        // Decide which "knob" to check based on the fan's team
-        // team1Excitement for home fans, team0Excitement for visitors
-        let currentExcitement = fan.isHome ? team1Excitement : team0Excitement;
+    // 2. TRIGGER CONDITIONS (The Wave / Fidgets)
+    const isThirdPeriod = (typeof currentPeriod !== 'undefined' && currentPeriod === 3); 
+    const homeTeamLeadByThree = (typeof scoreTeam1 !== 'undefined' && typeof scoreTeam0 !== 'undefined' && scoreTeam1 - scoreTeam0 >= 3);
 
-        // Roll the dice: should this specific fan fidget this frame?
-        if (Math.random() < currentExcitement) {
-            // If they are excited, the range scales up too
-            let range = currentExcitement > AMBIENT_EXCITEMENT ? 4.0 : AMBIENT_RANGE;
-            
-            fan.fidgetX = (Math.random() * (range * 2) - range); 
-            fan.fidgetY = (Math.random() * (range * 2) - range);
-            fan.fidgetAngle = (Math.random() * (range * 0.2) - (range * 0.1));
+    // Note: executeTheWave() must exist in your crowd_data.js or similar
+    if (isThirdPeriod && homeTeamLeadByThree && typeof executeTheWave === 'function') {
+        executeTheWave();
+    } else {
+        // Run Standard Fidgets
+        if (typeof masterCrowd !== 'undefined') {
+            masterCrowd.forEach(fan => {
+                let currentExcitement = fan.isHome ? team1Excitement : team0Excitement;
+
+                if (Math.random() < currentExcitement) {
+                    let range = currentExcitement > AMBIENT_EXCITEMENT ? 4.0 : AMBIENT_RANGE;
+                    
+                    fan.fidgetX = (Math.random() * (range * 2) - range); 
+                    fan.fidgetY = (Math.random() * (range * 2) - range);
+                    fan.fidgetAngle = (Math.random() * (range * 0.2) - (range * 0.1));
+                }
+            });
         }
-    });
+    }
 
-    generateCrowd(typeof currentDisappointment !== 'undefined' ? currentDisappointment : 0);
+    // 3. REDRAW
+    if (typeof generateCrowd === 'function' && typeof currentDisappointment !== 'undefined') {
+        generateCrowd(currentDisappointment);
+    }
 }
 
 
@@ -7194,46 +7241,47 @@ function loop(now) {
         lastTime = now;
     }
 
-    // 1. GLOBAL UPDATES (Runs regardless of state)
+    // 1. GLOBAL UPDATES
     updateLivingCrowd(); 
 
-    // --- NEW: GLOBAL EXODUS TRIGGER ---
-    // This ensures disappointment is calculated during any stoppage,
-    // even if we are in 'tournament' state.
     const isStoppage = isResetActive() || performance.now() < faceoffPauseUntil;
-    
-    if (isStoppage) {
-        // ONLY calculate exodus if there is NO active goal celebration
-        // This prevents the "instant vanish" when a goal is scored.
-        if (!isGoalCelebrationActive()) {
-            calculateExodus();
-        }
+    if (isStoppage && !isGoalCelebrationActive()) {
+        calculateExodus();
     }
 
-    // 2. GLOBAL GOAL TRIGGER (Ensures crowd reacts in Tournaments too)
     if (typeof isGoalCelebrationActive === 'function' && isGoalCelebrationActive()) {
         if (team1Excitement === AMBIENT_EXCITEMENT && team0Excitement === AMBIENT_EXCITEMENT) {
             triggerGoalExcitement(lastGoalTeam);
         }
     }
 
-    // 3. STATE: TOURNAMENT
+    // 2. PLAYOFF BRACKET (Visual Tree)
+    if (gameState === 'playoff_bracket') {
+        if (typeof Playoffs !== 'undefined') Playoffs.drawBracket(ctx, W, H);
+        requestAnimationFrame(loop);
+        return;
+    }
+
+    // 3. PLAYOFF GAMEPLAY (Handles Warp Speed)
+    if (gameState === 'playoffs') {
+        // This is the magic line that enables the "W" key speed-up
+        if (typeof Playoffs !== 'undefined') Playoffs.runGameTick(now);
+        requestAnimationFrame(loop);
+        return;
+    }
+
+    // 4. TOURNAMENT (Regular Season)
     if (gameState === 'tournament') {
-        //renderFrame(); // Draws the rink and the now-fidgeting crowdLayer
-        // if (typeof renderTournamentStatus === 'function') renderTournamentStatus();
-        
         requestAnimationFrame(loop); 
         return; 
     }
-
-    // 4. STATE: TOURNAMENT OVER
     if (gameState === 'tournament_over') {
         if (typeof drawTournamentResults === 'function') drawTournamentResults();
         requestAnimationFrame(loop);
         return;
     }
 
-    // 5. STATE: PAUSED / REPLAY
+    // 5. PAUSED / REPLAY
     if (typeof isPaused !== 'undefined' && isPaused) {
         renderFrame();
         lastTime = now;
@@ -7241,7 +7289,6 @@ function loop(now) {
         if (goalResetTimer) goalResetTimer += 16;
         if (whistleEndTimer) whistleEndTimer += 16;
         if (faceoffPauseUntil) faceoffPauseUntil += 16;
-        
         requestAnimationFrame(loop);
         return;
     }
@@ -7249,67 +7296,56 @@ function loop(now) {
     // 6. UI STATES
     if (gameState === 'menu') { drawMenu(); requestAnimationFrame(loop); return; }
     if (gameState === 'options') { drawOptionsMenu(); requestAnimationFrame(loop); return; }
-    if (gameState === 'gameover') { return handleGameOver(now); }
+    
+    // *** NEW: CHAMPION SCREEN HANDLER ***
+    if (gameState === 'champion_screen') {
+        // Just draw the bracket (which handles the Trophy text and View Toggle)
+        if (typeof Playoffs !== 'undefined') {
+            Playoffs.drawBracket(ctx, W, H);
+        }
+        requestAnimationFrame(loop);
+        return; // <--- CRITICAL: Stops the code from falling through to physics
+    }
+    // ************************************
+
+    // GAME OVER INTERCEPT
+    if (gameState === 'gameover') { 
+        if (typeof Playoffs !== 'undefined' && Playoffs.active) {
+            Playoffs.reportGameResult(scoreTeam0, scoreTeam1);
+            requestAnimationFrame(loop);
+            return;
+        }
+        return handleGameOver(now); 
+    }
+
     if (gameState === 'intermission') { renderFrame(); requestAnimationFrame(loop); return; }
     if (gameState === 'training_menu') { drawTrainingMenu(); requestAnimationFrame(loop); return; }
-
-    // 7. STATE: TRAINING INTERMISSION
     if (gameState === "training_intermission") {
-        ctx.fillStyle = "#000";
-        ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
         if (typeof renderTournamentStatus === 'function') renderTournamentStatus();
-
         const curNow = performance.now();
-        ctx.save();
-        ctx.fillStyle = "rgba(0,0,0,0.85)";
-        ctx.fillRect(0, H-120, W, 120);
-        ctx.textAlign = "center";
-        ctx.fillStyle = "#fff";
-        ctx.font = "bold 24px Arial";
-        ctx.fillText("🧠 AI COACH THINKING...", W/2, H-80);
-        ctx.fillStyle = "#7aa2f7";
-        ctx.font = "16px Monospace";
-        ctx.fillText(AICoach.mutationDetails || "Analyzing...", W/2, H-50);
-        const secondsLeft = Math.ceil((trainingIntermissionTimer - curNow) / 1000);
-        ctx.fillStyle = "#aaa";
-        ctx.font = "12px Arial";
-        ctx.fillText(`Next Episode in ${secondsLeft}s`, W/2, H-20);
-        ctx.restore();
-
-        if (curNow > trainingIntermissionTimer) {
-            AICoach.startEpisode(); 
-        }
-        
+        if (curNow > trainingIntermissionTimer) AICoach.startEpisode(); 
         requestAnimationFrame(loop);
         return;
     }
 
     // =====================================================
-    // GAME FLOW PAUSED (Goals, Whistles, Celebrations)
+    // 7. STANDARD GAMEPLAY (Exhibition Mode)
     // =====================================================
+    // This only runs if we are NOT in playoffs/tournament mode
+    
     const isGameFlowPaused = isResetActive() || performance.now() < faceoffPauseUntil;
 
     if (isGameFlowPaused) {
-        updateClock(now);
-        
+        updateClock(now); 
         if (isGoalCelebrationActive()) {
             puck.update();
             collideCircleWithRink(puck, puck.r, 0.8);
-            for (const p of players) {
-                updatePlayer(p);
-                enforcePlayerWalls(p);
-            }
+            for (const p of players) { updatePlayer(p); enforcePlayerWalls(p); }
             resolvePlayerCollisions();
-
-            if (goalResetTimer - now > 4000) {
-                if (typeof captureReplayFrame === 'function') captureReplayFrame();
-            }
+            if (goalResetTimer - now > 4000 && typeof captureReplayFrame === 'function') captureReplayFrame();
         }
-        
-        if (whistleEndTimer && now >= whistleEndTimer) {
-            whistleEndTimer = null;
-            doFaceoffReset();
-        } 
+        if (whistleEndTimer && now >= whistleEndTimer) { whistleEndTimer = null; doFaceoffReset(); } 
         else if (goalResetTimer && now >= goalResetTimer) {
             goalResetTimer = null; 
             if (isSuddenDeathGoal) {
@@ -7318,24 +7354,17 @@ function loop(now) {
                 gameState = "gameover"; 
                 isSuddenDeathGoal = false; 
             } else {
-                if (typeof startInstantReplay === 'function') {
-                    startInstantReplay(() => { doGoalReset(); });
-                } else {
-                    doGoalReset();
-                }
+                if (typeof startInstantReplay === 'function') startInstantReplay(() => { doGoalReset(); });
+                else doGoalReset();
             }
         }
-
         if (!TRAINING_MODE || WATCH_MODE) renderFrame();
         requestAnimationFrame(loop);
         return;
     }
 
-    // =====================================================
-    // ACTIVE GAMEPLAY
-    // =====================================================
+    // Active Physics
     const safeReplayCheck = (typeof isReplaying !== 'undefined') ? !isReplaying : true;
-
     if (!TRAINING_MODE && safeReplayCheck) {
         puck.update();
         checkOffsides();
@@ -7343,10 +7372,8 @@ function loop(now) {
         resolveGoalCollisions(puck);
         checkGoalieHarassment();
         checkNetPinning(); 
-
         if (puckEscapedRink()) handlePuckEscape();
         if (puckStealCooldown > 0) puckStealCooldown--;
-        
         checkGoal(); 
         
         if (detectPuckStuckInNet()) {
@@ -7367,11 +7394,9 @@ function loop(now) {
     }
 
     if (!TRAINING_MODE || WATCH_MODE) renderFrame();
-
     updateClock(now);
     requestAnimationFrame(loop);
 }
-
 
 
 

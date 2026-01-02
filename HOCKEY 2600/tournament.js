@@ -564,7 +564,8 @@ startNextMatch: function() {
         } else {
             gameState = "tournament_over";
             console.log("🏆 TOURNAMENT COMPLETE");
-            console.table(this.standings);
+            // console.table(this.standings);
+            Playoffs.init(this.standings);
             requestAnimationFrame(loop);
         }
     }
