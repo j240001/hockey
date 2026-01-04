@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>AI Skater: Sharpshooter Fix</title>
+<style>
+    body { background: #222; display: flex; flex-direction: column; align-items: center; color: #fff; font-family: sans-serif; padding: 20px; }
+    .game-container { position: relative; }
+    canvas { background: #ccefff; border: 4px solid #444; cursor: crosshair; display: block; }
+    #overlay { 
+        position: absolute; top: 10px; left: 10px; pointer-events: none;
+        font-family: monospace; font-size: 14px; font-weight: bold; 
+        color: #333; text-shadow: 0 0 2px #fff;
+    }
+    #controls { 
+        width: 800px; margin-top: 10px; display: flex; gap: 10px; 
+        background: #333; padding: 10px; border: 2px solid #555;
+    }
+    .panel { flex: 1; display: flex; flex-direction: column; gap: 5px; }
+    textarea { 
+        width: 100%; height: 100px; background: #111; color: #0f0; 
+        font-family: monospace; font-size: 12px; border: 1px solid #555; resize: none; 
+    }
+    button { padding: 10px; background: #444; color: #fff; border: 1px solid #666; cursor: pointer; font-weight: bold; }
+    h4 { margin: 0 0 5px 0; color: #ccc; font-size: 12px; text-transform: uppercase; }
+</style>
+</head>
+<body>
+
+<div class="game-container">
+    <canvas id="rink" width="1000" height="600"></canvas>
+    <div id="overlay">
+        CTRL: LOCK ON & SHOOT<br>
+        <span id="debugState" style="color:red"></span>
+    </div>
+</div>
+
+<div id="controls">
+    <div class="panel">
+        <h4>Shot JSON</h4>
+        <textarea id="shotJson"></textarea>
+    </div>
+    <div class="panel">
+        <p style="font-size:12px; color:#aaa;">The skater will now <b>wait</b> until his body is aligned with the net before releasing the puck.</p>
+        <button onclick="resetPuck()" style="background: #d00;">RESET PUCK</button>
+    </div>
+</div>
+
+<script>
+const canvas = document.getElementById("rink");
+const ctx = canvas.getContext("2d");
+const debugState = document.getElementById("debugState");
+
+const NET_POS = { x: 920, y: 300 };
+
+const SPECS = {
+    topX: 13, topY: -16, knobLength: 15,
+    shoulderX: 8, shoulderY: 16,
+    cradleX: 10, cradleY: -9,
+    strideFreq: 0.05, strideAmp: 0.14
+};
+
+let currentShot = {
+  "duration": 120,
+  "backstroke": { "botX": -10, "botY": 43, "rot": 45, "reach": 50 },
+  "release": { "botX": 36, "botY": 32, "rot": -17, "reach": 50 }
+};
+
+document.getElementById("shotJson").value = JSON.stringify(currentShot, null, 2);
+
+function resetPuck() {
+    puck.x = 500; puck.y = 300; puck.vx = 0; puck.vy = 0; puck.owner = null;
+}
+
+const mouse = { x: 200, y: 300 };
+canvas.addEventListener("mousemove", e => {
+    const r = canvas.getBoundingClientRect();
+    mouse.x = e.clientX - r.left;
+    mouse.y = e.clientY - r.top;
+});
+
+window.addEventListener("keydown", e => {
+    if (e.key === "Control" || e.code === "Space") triggerShot();
+});
+
+const puck = {
+    x: 800, y: 300, vx: 0, vy: 0, owner: null, friction: 0.985,
+    update() {
+        if (this.owner === 'skater') return;
+        this.x += this.vx; this.y += this.vy;
+        this.vx *= this.friction; this.vy *= this.friction;
+        if(this.x<10 || this.x>990) this.vx *= -0.8;
+        if(this.y<10 || this.y>590) this.vy *= -0.8;
+        this.x = Math.max(10, Math.min(990, this.x));
+        this.y = Math.max(10, Math.min(590, this.y));
+    }
+};
+
+const skater = {
+    x: 200, y: 300, vx: 0, vy: 0, facingAngle: 0, visualBodyAngle: 0,
+    state: 'skating', animStartTime: 0, startPose: null, aimAngle: 0, lastShotTime: 0,
+    pose: { botX: 28, botY: 7, rot: 0, reach: 50 },
+    topHand: {x:0, y:0}, bottomHand: {x:0, y:0}, bladePos: {x:0, y:0}, cradlePos: {x:0, y:0},
+    currentStickAngle: 0, strideClock: 0, strideSway: 0,
+
+    update() {
+        const time = performance.now();
+        let targetX = mouse.x, targetY = mouse.y;
+
+        if (puck.owner !== 'skater') {
+            targetX = puck.x; targetY = puck.y;
+            const dist = Math.hypot(this.cradlePos.x - puck.x, this.cradlePos.y - puck.y);
+            if (dist < 40 && this.state === 'skating' && (time - this.lastShotTime) > 500) {
+                puck.owner = 'skater';
+            }
+        }
+
+        // --- BRAKING AND STEERING ---
+        if (this.state === 'skating') {
+            const dx = targetX - this.x, dy = targetY - this.y;
+            const dist = Math.hypot(dx, dy);
+            this.facingAngle += normalizeAngle(Math.atan2(dy, dx) - this.facingAngle) * 0.1;
+            if (dist > 70) {
+                this.vx += Math.cos(this.facingAngle) * 0.3;
+                this.vy += Math.sin(this.facingAngle) * 0.3;
+            } else { this.vx *= 0.9; this.vy *= 0.9; }
+        }
+
+        this.vx *= 0.95; this.vy *= 0.95;
+        this.x += this.vx; this.y += this.vy;
+
+        const speed = Math.hypot(this.vx, this.vy);
+        this.strideClock += speed > 0.5 ? SPECS.strideFreq * speed : 0;
+        this.strideSway = speed > 0.5 ? Math.sin(this.strideClock) * SPECS.strideAmp : this.strideSway * 0.8;
+        this.visualBodyAngle = this.facingAngle + this.strideSway;
+
+        // --- IMPROVED SHOT LOGIC (WAIT FOR ALIGNMENT) ---
+        if (this.state === 'skating') {
+            this.pose = { botX: 28, botY: 7, rot: 0, reach: 50 };
+            debugState.innerText = "";
+        } 
+        else if (this.state === 'winding') {
+            const windDuration = 150; 
+            const elapsed = time - this.animStartTime;
+            let t = Math.min(1, elapsed / windDuration);
+            this.pose = lerpPose(this.startPose, currentShot.backstroke, t);
+
+            // AUTO-AIM TURN
+            let aimDiff = normalizeAngle(this.aimAngle - this.facingAngle);
+            this.facingAngle += aimDiff * 0.15;
+
+            // ONLY RELEASE IF ALIGNED (< 0.15 rad / ~8 degrees)
+            if (t >= 1) {
+                if (Math.abs(aimDiff) < 0.15) {
+                    this.state = 'shooting';
+                    this.animStartTime = time;
+                } else {
+                    debugState.innerText = "ALIGNING...";
+                }
+            }
+        } 
+        else if (this.state === 'shooting') {
+            debugState.innerText = "FIRING!";
+            const elapsed = time - this.animStartTime;
+            let t = Math.min(1, elapsed / currentShot.duration);
+            this.pose = lerpPose(currentShot.backstroke, currentShot.release, t);
+
+            if (t >= 1) {
+                if (puck.owner === 'skater') {
+                    puck.owner = null;
+                    this.lastShotTime = time;
+                    const power = 3500 / currentShot.duration;
+                    // Precise final aim correction
+                    puck.vx = Math.cos(this.aimAngle) * power + this.vx;
+                    puck.vy = Math.sin(this.aimAngle) * power + this.vy;
+                }
+                this.state = 'skating';
+            }
+        }
+
+        // --- KINEMATICS ---
+        const totalBodyRot = this.visualBodyAngle + (this.pose.rot * Math.PI / 180);
+        const cos = Math.cos(totalBodyRot), sin = Math.sin(totalBodyRot);
+        const toWorld = (lx, ly) => ({ x: this.x + (lx*cos - ly*sin), y: this.y + (lx*sin + ly*cos) });
+
+        this.topHand = toWorld(SPECS.topX, SPECS.topY);
+        this.bottomHand = toWorld(this.pose.botX, this.pose.botY);
+        const sDX = this.bottomHand.x - this.topHand.x, sDY = this.bottomHand.y - this.topHand.y;
+        this.currentStickAngle = Math.atan2(sDY, sDX);
+        this.bladePos = {
+            x: this.bottomHand.x + Math.cos(this.currentStickAngle) * this.pose.reach,
+            y: this.bottomHand.y + Math.sin(this.currentStickAngle) * this.pose.reach
+        };
+        const bA = this.currentStickAngle - 1.2, nA = bA + Math.PI/2;
+        this.cradlePos = {
+            x: this.bladePos.x + Math.cos(bA)*SPECS.cradleX + Math.cos(nA)*SPECS.cradleY,
+            y: this.bladePos.y + Math.sin(bA)*SPECS.cradleX + Math.sin(nA)*SPECS.cradleY
+        };
+        if (puck.owner === 'skater') { puck.x = this.cradlePos.x; puck.y = this.cradlePos.y; }
+    },
+
+    draw() {
+        const rot = this.visualBodyAngle + (this.pose.rot * Math.PI / 180);
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(rot);
+        ctx.fillStyle = "#00205b"; ctx.beginPath(); ctx.roundRect(-14, -25, 28, 50, 6); ctx.fill();
+        ctx.fillStyle = "#cf4520"; ctx.fillRect(-4, -25, 8, 50);
+        ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(10, 0, 11, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle="#333"; ctx.lineWidth=2; ctx.stroke();
+        ctx.fillStyle = "#4488ff"; ctx.beginPath(); ctx.arc(8, 16, 7, 0, Math.PI*2); ctx.fill(); 
+        ctx.beginPath(); ctx.arc(8, -16, 7, 0, Math.PI*2); ctx.fill(); 
+        ctx.restore();
+
+        const sA = this.currentStickAngle;
+        ctx.strokeStyle = "#5d4037"; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(this.topHand.x - Math.cos(sA)*SPECS.knobLength, this.topHand.y - Math.sin(sA)*SPECS.knobLength);
+        ctx.lineTo(this.bladePos.x, this.bladePos.y); ctx.stroke();
+        
+        const sC = Math.cos(rot), sS = Math.sin(rot);
+        const getSh = (lx, ly) => ({ x: this.x + (lx*sC-ly*sS), y: this.y + (lx*sC+ly*sS) }); // simplified draw call
+        drawArm(this.topHand, {x: this.x + (8*sC - (-16)*sS), y: this.y + (8*sS + (-16)*sC)}, "#00ccff", "#ffcc00");
+        drawArm(this.bottomHand, {x: this.x + (8*sC - 16*sS), y: this.y + (8*sS + 16*sC)}, "#00ccff", "#ff6600");
+        
+        ctx.save();
+        ctx.translate(this.bladePos.x, this.bladePos.y);
+        ctx.rotate(sA - 1.2); ctx.fillStyle = "black"; ctx.fillRect(-2, -2, 16, 4);
+        ctx.restore();
+    }
+};
+
+function triggerShot() {
+    if (skater.state === 'skating' && puck.owner === 'skater') {
+        skater.startPose = { ...skater.pose };
+        skater.state = 'winding';
+        skater.animStartTime = performance.now();
+        skater.aimAngle = Math.atan2(NET_POS.y - skater.y, NET_POS.x - skater.x);
+    }
+}
+
+function lerp(s, e, t) { return s * (1 - t) + e * t; }
+function lerpPose(p1, p2, t) {
+    return { botX: lerp(p1.botX, p2.botX, t), botY: lerp(p1.botY, p2.botY, t), rot: lerp(p1.rot, p2.rot, t), reach: lerp(p1.reach, p2.reach, t) };
+}
+function normalizeAngle(a) { while (a <= -Math.PI) a += 2 * Math.PI; while (a >  Math.PI)  a -= 2 * Math.PI; return a; }
+
+function drawArm(hand, sh, armC, gloveC) {
+    const ang = Math.atan2(sh.y - hand.y, sh.x - hand.x);
+    ctx.save();
+    ctx.translate(hand.x, hand.y); ctx.rotate(ang);
+    ctx.fillStyle = armC; ctx.beginPath(); ctx.roundRect(0, -6, Math.min(40, Math.hypot(sh.x-hand.x, sh.y-hand.y)), 12, 6); ctx.fill();
+    ctx.fillStyle = gloveC; ctx.beginPath(); ctx.arc(0, 0, 7, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+}
+
+function loop() {
+    ctx.fillStyle = "#ccefff"; ctx.fillRect(0,0,canvas.width, canvas.height);
+    ctx.fillStyle = "#d00"; ctx.fillRect(NET_POS.x - 20, NET_POS.y - 50, 10, 100);
+    puck.update(); skater.update(); skater.draw();
+    ctx.beginPath(); ctx.arc(puck.x, puck.y, 6, 0, Math.PI*2); ctx.fillStyle="#111"; ctx.fill();
+    requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>

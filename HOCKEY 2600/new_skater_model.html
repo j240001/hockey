@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>AI Skater: Final Locked</title>
+<style>
+    body { background: #222; display: flex; flex-direction: column; align-items: center; color: #fff; font-family: sans-serif; }
+    canvas { background: #ccefff; border: 4px solid #444; cursor: none; }
+    #status { margin-top: 10px; font-family: monospace; color: #888; text-align: center; }
+    #controls { margin-top: 10px; display: grid; grid-template-columns: 120px 300px 50px; gap: 8px; font-family: monospace; font-size: 13px; }
+    .sep { grid-column: 1 / -1; border-top: 1px solid #444; margin-top: 5px; margin-bottom: 5px; }
+    h4 { grid-column: 1 / -1; margin: 0; color: #ccc; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
+    .paused-msg { color: #ff3333; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<canvas id="rink" width="1000" height="600"></canvas>
+
+<div id="controls">
+    <h4>Body Geometry</h4>
+    <label>Body Pivot</label> <input type="range" id="bodySlide" min="-30" max="30" step="1" value="0"> <span id="bodyVal">0</span>
+
+    <div class="sep"></div>
+
+    <h4>Top Hand (Pivot)</h4>
+    <label>Fwd/Back (X)</label> <input type="range" id="topXSlide" min="-40" max="40" step="1" value="13"> <span id="topXVal">13</span>
+    <label>Left/Right (Y)</label> <input type="range" id="topYSlide" min="-40" max="40" step="1" value="-16"> <span id="topYVal">-16</span>
+    <label>Knob Ext.</label> <input type="range" id="knobSlide" min="0" max="60" step="1" value="15"> <span id="knobVal">15</span>
+
+    <div class="sep"></div>
+
+    <h4>Bottom Hand</h4>
+    <label>Fwd/Back (X)</label> <input type="range" id="botXSlide" min="0" max="80" step="1" value="28"> <span id="botXVal">28</span>
+    <label>Left/Right (Y)</label> <input type="range" id="botYSlide" min="-40" max="40" step="1" value="7"> <span id="botYVal">7</span>
+    
+    <h4>Blade & Reach Limits</h4>
+    <label>Blade Reach</label> <input type="range" id="reachSlide" min="20" max="100" step="1" value="50"> <span id="reachVal">50</span>
+    
+    <label>Cone Right</label> <input type="range" id="coneRSlide" min="0.2" max="2.5" step="0.1" value="1.5"> <span id="coneRVal">1.5</span>
+    <label>Cone Left</label> <input type="range" id="coneLSlide" min="0.2" max="2.5" step="0.1" value="0.5"> <span id="coneLVal">0.5</span>
+    
+    <label>Cradle (X)</label> <input type="range" id="cradleXSlide" min="-10" max="30" step="1" value="10"> <span id="cradleXVal">10</span>
+    <label>Cradle (Y)</label> <input type="range" id="cradleYSlide" min="-20" max="20" step="1" value="-9"> <span id="cradleYVal">-9</span>
+
+    <div class="sep"></div>
+
+    <h4>Physics</h4>
+    <label>Stride Freq</label> <input type="range" id="freqSlide" min="0.02" max="0.2" step="0.01" value="0.05"> <span id="freqVal">0.05</span>
+    <label>Stride Amp</label> <input type="range" id="ampSlide" min="0.0" max="0.3" step="0.01" value="0.14"> <span id="ampVal">0.14</span>
+</div>
+
+<div id="status">
+    <b>FINAL LOCKED</b><br>
+    All settings applied to your specifications.<br>
+    Ready for gameplay.
+</div>
+
+<script>
+const canvas = document.getElementById("rink");
+const ctx = canvas.getContext("2d");
+
+let isPaused = false;
+
+// --- CONFIG (LOCKED DOWN) ---
+const CONFIG = {
+    bodyOffset: 0,
+    topX: 13, topY: -16, knobLength: 15, 
+    botX: 28, botY: 7,
+    bladeReach: 50, 
+    
+    coneRight: 1.5, 
+    coneLeft: 0.5,  
+    
+    cradleX: 10, cradleY: -9, 
+    strideFreq: 0.05, strideAmp: 0.14, turnSpeed: 0.08    
+};
+
+function bind(id, key) {
+    document.getElementById(id).oninput = function() { 
+        CONFIG[key] = parseFloat(this.value); 
+        document.getElementById(id.replace("Slide", "Val")).innerText = this.value; 
+    };
+}
+bind("bodySlide", "bodyOffset");
+bind("topXSlide", "topX"); bind("topYSlide", "topY"); bind("knobSlide", "knobLength");
+bind("botXSlide", "botX"); bind("botYSlide", "botY"); 
+bind("reachSlide", "bladeReach"); 
+bind("coneRSlide", "coneRight"); bind("coneLSlide", "coneLeft"); 
+bind("cradleXSlide", "cradleX"); bind("cradleYSlide", "cradleY"); 
+bind("freqSlide", "strideFreq"); bind("ampSlide", "strideAmp");
+
+window.addEventListener("keydown", e => {
+    if (e.key.toLowerCase() === 'p') {
+        isPaused = !isPaused;
+        const status = document.getElementById("status");
+        if (isPaused) status.innerHTML = "<span class='paused-msg'>PAUSED</span>";
+        else status.innerHTML = "<b>FINAL LOCKED</b><br>Ready for gameplay.";
+    }
+});
+
+const mouse = { x: 500, y: 300, down: false };
+canvas.addEventListener("mousemove", e => {
+    const rect = canvas.getBoundingClientRect();
+    mouse.x = e.clientX - rect.left;
+    mouse.y = e.clientY - rect.top;
+});
+canvas.addEventListener("mousedown", () => mouse.down = true);
+canvas.addEventListener("mouseup",   () => mouse.down = false);
+
+function normalizeAngle(a) { while (a <= -Math.PI) a += 2 * Math.PI; while (a >  Math.PI)  a -= 2 * Math.PI; return a; }
+function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+const puck = {
+    x: 400, y: 300, vx: 0, vy: 0, size: 6, owner: null,
+    springStiffness: 0.20, friction: 0.98, breakThreshold: 32, 
+
+    update() {
+        if (isPaused && this.owner !== 'user') return; 
+
+        if (this.owner === 'user') {
+            this.x = mouse.x; this.y = mouse.y;
+            this.vx = (mouse.x - this.x)*0.5; this.vy = (mouse.y - this.y)*0.5; 
+            if (!mouse.down) this.owner = null;
+            return;
+        }
+        if (mouse.down && this.owner !== 'user') {
+            if (Math.hypot(mouse.x - this.x, mouse.y - this.y) < 30) { this.owner = 'user'; return; }
+        }
+
+        if (this.owner === 'ai') {
+            const bladeAng = skater.currentStickAngle - 1.2;
+            const normAng = bladeAng + Math.PI/2;
+            const targetX = skater.bladePos.x + (Math.cos(bladeAng) * CONFIG.cradleX) + (Math.cos(normAng) * CONFIG.cradleY);
+            const targetY = skater.bladePos.y + (Math.sin(bladeAng) * CONFIG.cradleX) + (Math.sin(normAng) * CONFIG.cradleY);
+            
+            const dx = targetX - this.x;
+            const dy = targetY - this.y;
+            const dist = Math.hypot(dx, dy);
+
+            if (dist > this.breakThreshold) this.owner = null; 
+            else {
+                this.vx += dx * this.springStiffness;
+                this.vy += dy * this.springStiffness;
+                this.vx *= 0.8; this.vy *= 0.8;
+            }
+        } else {
+            const tip = skater.bladePos;
+            const dx = tip.x - this.x;
+            const dy = tip.y - this.y;
+            const dist = Math.hypot(dx, dy);
+            
+            if (dist < 25) { 
+                this.owner = 'ai'; 
+            } 
+            else if (dist < 60 && skater.isPoking) {
+                this.vx += dx * 0.05; 
+                this.vy += dy * 0.05;
+            }
+        }
+
+        this.x += this.vx; this.y += this.vy;
+        if (this.owner !== 'ai') { this.vx *= this.friction; this.vy *= this.friction; }
+
+        if(this.x<10 || this.x>990) this.vx*=-0.8;
+        if(this.y<10 || this.y>590) this.vy*=-0.8;
+        this.x = Math.max(10, Math.min(990, this.x));
+        this.y = Math.max(10, Math.min(590, this.y));
+    },
+    draw() {
+        ctx.beginPath(); ctx.arc(this.x, this.y, 6, 0, Math.PI*2);
+        ctx.fillStyle = "#111"; ctx.fill();
+    }
+};
+
+const skater = {
+    x: 600, y: 300, vx: 0, vy: 0,
+    teamColor: "#00205b", stripeColor: "#cf4520",
+    
+    facingAngle: 0, visualBodyAngle: 0, angularVelocity: 0, 
+    currentStickAngle: 0, currentStickLength: 20,
+    
+    strideClock: 0, strideSway: 0, isPoking: false,
+    
+    turnAccel: 0.01, stickTurnRate: 0.15, stickSlideSpeed: 5,  
+    torsoWidth: 28, torsoLength: 50, shoulderFwd: 8, shoulderSide: 16, maxReach: 100,
+    
+    bladePos: {x:0, y:0}, targetPos: {x:0, y:0}, topHand: {x:0, y:0}, bottomHand: {x:0, y:0},
+
+    getBodyRelativePos(offsetX, offsetY, angleToUse) {
+        const effectiveX = offsetX + CONFIG.bodyOffset;
+        const cos = Math.cos(angleToUse); const sin = Math.sin(angleToUse);
+        return { x: this.x + (effectiveX*cos - offsetY*sin), y: this.y + (effectiveX*sin + offsetY*cos) };
+    },
+    
+    getVisualShoulder(isRight) {
+        const sideDir = isRight ? 1 : -1;
+        const angle = this.visualBodyAngle;
+        const effectiveX = 8 + CONFIG.bodyOffset;
+        return { 
+            x: this.x + (Math.cos(angle)*effectiveX) + (Math.cos(angle+Math.PI/2)*16*sideDir),
+            y: this.y + (Math.sin(angle)*effectiveX) + (Math.sin(angle+Math.PI/2)*16*sideDir)
+        };
+    },
+
+    update() {
+        if (!isPaused) {
+            const hasPuck = (puck.owner === 'ai');
+            let moveSpeed = 0;
+            
+            const speed = Math.hypot(this.vx, this.vy);
+            if (speed > 0.1) {
+                this.strideClock += CONFIG.strideFreq * speed; 
+                this.strideSway = Math.sin(this.strideClock) * CONFIG.strideAmp; 
+            } else { this.strideSway *= 0.8; }
+            this.visualBodyAngle = this.facingAngle + this.strideSway;
+
+            let useDirectHandControl = false;
+
+            if (hasPuck) {
+                useDirectHandControl = true;
+                this.isPoking = false;
+
+                const dx = mouse.x - this.x; const dy = mouse.y - this.y;
+                let targetSteer = Math.atan2(dy, dx) + Math.PI;
+                const margin = 100;
+                if (this.x<margin) targetSteer=0; else if(this.x>1000-margin) targetSteer=Math.PI; 
+                if (this.y<margin) targetSteer=Math.PI/2; else if(this.y>600-margin) targetSteer=-Math.PI/2; 
+                this.steerBody(targetSteer);
+                moveSpeed = 0.8; 
+
+            } else {
+                const dx = puck.x - this.x; const dy = puck.y - this.y;
+                const dist = Math.hypot(dx, dy);
+                const angleToPuck = Math.atan2(dy, dx);
+                
+                if (dist > 15) {
+                    this.steerBody(angleToPuck);
+                    moveSpeed = (dist < 100) ? 0.6 : 1.1;
+                }
+
+                if (this.isPoking) {
+                    if (dist > 200) this.isPoking = false;
+                } else {
+                    if (dist < 130) this.isPoking = true;
+                }
+
+                if (this.isPoking) {
+                    this.targetPos.x = puck.x; this.targetPos.y = puck.y;
+                    useDirectHandControl = false; 
+                } else {
+                    useDirectHandControl = true;
+                }
+            }
+
+            if (moveSpeed > 0) {
+                this.vx += Math.cos(this.facingAngle) * 0.2 * moveSpeed;
+                this.vy += Math.sin(this.facingAngle) * 0.2 * moveSpeed;
+            }
+            this.vx *= 0.96; this.vy *= 0.96;
+            this.x += this.vx; this.y += this.vy;
+            if(this.x<25) this.vx=Math.abs(this.vx); if(this.x>975) this.vx=-Math.abs(this.vx);
+            if(this.y<25) this.vy=Math.abs(this.vy); if(this.y>575) this.vy=-Math.abs(this.vy);
+
+            if (useDirectHandControl) {
+                this.topHand = this.getBodyRelativePos(CONFIG.topX, CONFIG.topY, this.facingAngle);
+                this.bottomHand = this.getBodyRelativePos(CONFIG.botX, CONFIG.botY, this.facingAngle);
+                const sdx = this.bottomHand.x - this.topHand.x;
+                const sdy = this.bottomHand.y - this.topHand.y;
+                this.currentStickAngle = Math.atan2(sdy, sdx);
+                const bladeDist = CONFIG.bladeReach; 
+                this.bladePos.x = this.bottomHand.x + Math.cos(this.currentStickAngle) * bladeDist;
+                this.bladePos.y = this.bottomHand.y + Math.sin(this.currentStickAngle) * bladeDist;
+                this.currentStickLength = Math.hypot(this.bladePos.x - this.topHand.x, this.bladePos.y - this.topHand.y);
+            } else {
+                this.solveGyroStick(); 
+                this.solveIK();
+            }
+
+        } else {
+            // PAUSED
+            this.topHand = this.getBodyRelativePos(CONFIG.topX, CONFIG.topY, this.facingAngle);
+            this.bottomHand = this.getBodyRelativePos(CONFIG.botX, CONFIG.botY, this.facingAngle);
+            const sdx = this.bottomHand.x - this.topHand.x;
+            const sdy = this.bottomHand.y - this.topHand.y;
+            this.currentStickAngle = Math.atan2(sdy, sdx);
+            
+            const bladeDist = CONFIG.bladeReach; 
+            this.bladePos.x = this.bottomHand.x + Math.cos(this.currentStickAngle) * bladeDist;
+            this.bladePos.y = this.bottomHand.y + Math.sin(this.currentStickAngle) * bladeDist;
+        }
+    },
+
+    steerBody(targetAngle) {
+        let diff = normalizeAngle(targetAngle - this.facingAngle);
+        this.angularVelocity += diff * CONFIG.turnSpeed * 0.1; 
+        this.angularVelocity *= 0.85; 
+        this.angularVelocity = clamp(this.angularVelocity, -CONFIG.turnSpeed, CONFIG.turnSpeed);
+        this.facingAngle += this.angularVelocity;
+        this.facingAngle = normalizeAngle(this.facingAngle);
+    },
+
+    solveGyroStick() {
+        const pivot = this.getBodyRelativePos(CONFIG.topX, CONFIG.topY, this.facingAngle);
+        const dx = this.targetPos.x - pivot.x;
+        const dy = this.targetPos.y - pivot.y;
+        
+        let targetAngle = Math.atan2(dy, dx);
+
+        // --- ASYMMETRICAL CONE LOGIC ---
+        let diff = normalizeAngle(targetAngle - this.facingAngle);
+        if (diff > CONFIG.coneRight) targetAngle = this.facingAngle + CONFIG.coneRight;
+        if (diff < -CONFIG.coneLeft) targetAngle = this.facingAngle - CONFIG.coneLeft;
+
+        let angDiff = normalizeAngle(targetAngle - this.currentStickAngle);
+        this.currentStickAngle += clamp(angDiff, -this.stickTurnRate, this.stickTurnRate);
+        this.currentStickAngle = normalizeAngle(this.currentStickAngle);
+
+        let desiredLen = Math.hypot(dx, dy);
+        if (desiredLen > this.maxReach) desiredLen = this.maxReach;
+        if (desiredLen < 20) desiredLen = 20;
+        let lenDiff = desiredLen - this.currentStickLength;
+        this.currentStickLength += clamp(lenDiff, -this.stickSlideSpeed, this.stickSlideSpeed);
+        
+        this.bladePos.x = pivot.x + Math.cos(this.currentStickAngle) * this.currentStickLength;
+        this.bladePos.y = pivot.y + Math.sin(this.currentStickAngle) * this.currentStickLength;
+    },
+
+    solveIK() {
+        this.topHand = this.getBodyRelativePos(CONFIG.topX, CONFIG.topY, this.visualBodyAngle);
+        const dx = this.bladePos.x - this.topHand.x;
+        const dy = this.bladePos.y - this.topHand.y;
+        const dist = Math.hypot(dx, dy);
+        const angle = Math.atan2(dy, dx);
+        
+        const localDX = CONFIG.botX - CONFIG.topX;
+        const localDY = CONFIG.botY - CONFIG.topY;
+        let spacing = Math.hypot(localDX, localDY);
+        if (dist < spacing) spacing = dist * 0.8; 
+
+        this.bottomHand = {
+            x: this.topHand.x + Math.cos(angle) * spacing,
+            y: this.topHand.y + Math.sin(angle) * spacing
+        };
+    },
+
+    drawPseudoArm(ctx, handPos, shoulderPos, armColor, handColor) {
+        const dx = shoulderPos.x - handPos.x;
+        const dy = shoulderPos.y - handPos.y;
+        const angle = Math.atan2(dy, dx);
+        const dist = Math.min(30, Math.hypot(dx, dy));
+        
+        ctx.save();
+        ctx.translate(handPos.x, handPos.y);
+        ctx.rotate(angle);
+        ctx.fillStyle = armColor; ctx.beginPath(); ctx.roundRect(0, -6, dist, 12, 6); ctx.fill();
+        ctx.fillStyle = handColor; ctx.beginPath(); ctx.arc(0, 0, 7, 0, Math.PI*2); ctx.fill();
+        ctx.restore();
+    },
+
+    draw() {
+        const stickDX = this.bladePos.x - this.topHand.x;
+        const stickDY = this.bladePos.y - this.topHand.y;
+        const stickAng = Math.atan2(stickDY, stickDX);
+        const knobX = this.topHand.x - Math.cos(stickAng) * CONFIG.knobLength;
+        const knobY = this.topHand.y - Math.sin(stickAng) * CONFIG.knobLength;
+        
+        ctx.strokeStyle = "#5d4037"; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(knobX, knobY); ctx.lineTo(this.bladePos.x, this.bladePos.y); ctx.stroke();
+        
+        const leftShoulder = this.getVisualShoulder(false);
+        const rightShoulder = this.getVisualShoulder(true);
+        this.drawPseudoArm(ctx, this.topHand, leftShoulder, "#00ccff", "#ffcc00");
+        this.drawPseudoArm(ctx, this.bottomHand, rightShoulder, "#00ccff", "#ff6600");
+
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.visualBodyAngle); 
+        ctx.translate(CONFIG.bodyOffset, 0); 
+
+        const w = this.torsoWidth; const h = this.torsoLength;
+        ctx.fillStyle = this.teamColor; ctx.beginPath(); ctx.roundRect(-w/2, -h/2, w, h, 6); ctx.fill();
+        ctx.fillStyle = this.stripeColor; ctx.fillRect(-4, -h/2, 8, h); 
+        ctx.fillStyle = "#4488ff"; 
+        ctx.beginPath(); ctx.arc(8, 16, 7, 0, Math.PI*2); ctx.fill(); 
+        ctx.beginPath(); ctx.arc(8, -16, 7, 0, Math.PI*2); ctx.fill(); 
+        ctx.fillStyle = "#ffffff"; 
+        ctx.beginPath(); ctx.arc(10, 0, 11, 0, Math.PI*2); ctx.fill(); 
+        ctx.strokeStyle = "#333"; ctx.lineWidth = 2; ctx.stroke(); 
+        ctx.restore();
+        
+        ctx.save();
+        ctx.translate(this.bladePos.x, this.bladePos.y);
+        if (this.isPoking && !isPaused) {
+            ctx.strokeStyle = "rgba(0,255,0,0.3)"; ctx.lineWidth=1;
+            ctx.beginPath(); ctx.arc(0,0,60,0,Math.PI*2); ctx.stroke();
+        }
+        ctx.rotate(stickAng - 1.2); 
+        ctx.fillStyle = "black";
+        ctx.fillRect(-2, -2, 16, 4);
+        ctx.restore();
+    }
+};
+
+function loop() {
+    ctx.fillStyle = "#ccefff"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    ctx.strokeStyle = isPaused ? "#999" : "#d00"; 
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(500, 300, 50, 0, Math.PI*2); ctx.stroke();
+
+    puck.update();
+    skater.update();
+
+    puck.draw();
+    skater.draw();
+    
+    ctx.beginPath(); ctx.arc(mouse.x, mouse.y, 10, 0, Math.PI*2);
+    ctx.fillStyle = mouse.down ? "#aa0000" : "#ff0000"; ctx.fill();
+    
+    requestAnimationFrame(loop);
+}
+loop();
+
+</script>
+</body>
+</html>
