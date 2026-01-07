@@ -201,6 +201,7 @@ const Playoffs = {
             } 
             else {
                 puck.update();
+                if (typeof updateDroppedSticks === 'function') updateDroppedSticks();
                 checkOffsides();
                 checkDeadPuck();
                 resolveGoalCollisions(puck);
