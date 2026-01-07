@@ -363,15 +363,35 @@ function fullGameReset() {
     currentPeriod = 1;
     timeRemaining = GAME_DURATION_SECONDS;
     lastGameTimeUpdate = performance.now();
+
+    // =========================================================
+    // *** NEW: RANDOMIZE TEAMS ON RESTART ***
+    // =========================================================
+    if (gameState !== 'tournament' && typeof Strategies !== 'undefined') {
+        const stratKeys = Object.keys(Strategies);
+        
+        // Safety check: Ensure we actually have teams loaded
+        if (stratKeys.length > 1) {
+            // 1. Roll two random numbers
+            team0Index = Math.floor(Math.random() * stratKeys.length);
+            team1Index = Math.floor(Math.random() * stratKeys.length);
+
+            // 2. ANTI-CLONE CHECK
+            // If the randomizer picked the same team twice, 
+            // force Team 1 to move to the next team in the list.
+            if (team0Index === team1Index) {
+                team1Index = (team1Index + 1) % stratKeys.length;
+            }
+        }
+    }
+    // =========================================================
     
     // 2. Reset Physics/Rules
-    team0AttacksRight = true; // ALWAYS reset to default direction
+    team0AttacksRight = true; 
     
-    // *** THE FIX: FORCE GOALS BACK TO STARTING POSITIONS ***
-    // This cleans up any swaps left over from previous OT games
+    // Fix goals (prevent OT swap bug)
     goal1 = RX - 325;
     goal2 = RX + 325;
-    // ******************************************************
 
     offsideState.active = false;
     offsideState.team = null;
@@ -382,7 +402,7 @@ function fullGameReset() {
     isSuddenDeathGoal = false;
 
     // 3. Reset Strategies & Colors
-    initTeams(); // Re-initialize players with new settings
+    initTeams(); 
     resetPlayersToSpawn();
     startFaceoffPause();
 }
@@ -8415,3 +8435,4 @@ document.addEventListener("keydown", e => {
 
 </body>
 </html>
+
