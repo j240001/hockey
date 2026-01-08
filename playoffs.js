@@ -1,5 +1,5 @@
 // =========================================================
-// PLAYOFF ENGINE (Centered Bracket Layout)
+// PLAYOFF ENGINE (Advanced Stepping Modes)
 // =========================================================
 
 const Playoffs = {
@@ -10,14 +10,22 @@ const Playoffs = {
     seriesRotationIndex: 0, 
     activeSeries: null,
     
+    // --- RUN MODES ---
+    // "GAME"   = Stop after every game
+    // "SERIES" = Stop only when a series finishes (4 wins)
+    // "ROUND"  = Stop only when the entire round finishes
+    // "FULL"   = Non-stop until the Stanley Cup is awarded
+    runMode: "GAME", 
+    
     // Warp Controls
     watchMode: false,
     speedMult: 300,
     
-    // Throttle State
+    // Timers
     lastFrameTime: 0,
+    autoAdvanceTimer: null, // Handles the pause between auto-played games
     
-    // View Toggle State
+    // View State
     viewMode: "bracket", 
     finalStandingsReference: null, 
 
@@ -28,10 +36,12 @@ const Playoffs = {
         this.seriesRotationIndex = 0;
         this.watchMode = false; 
         this.lastFrameTime = 0;
+        this.autoAdvanceTimer = null;
         this.finalStandingsReference = finalStandings;
         this.viewMode = "bracket";
+        this.runMode = "GAME"; // Default safety mode
 
-        console.log("🔥 PLAYOFFS INITIALIZED 🔥");
+        console.log("🏆 PLAYOFFS INITIALIZED 🏆");
 
         const sorted = Object.values(finalStandings).sort((a, b) => {
             if (b.Pts !== a.Pts) return b.Pts - a.Pts;
@@ -56,10 +66,6 @@ const Playoffs = {
         this.bracket.round3 = [];
 
         gameState = "playoff_bracket"; 
-        
-        if (!this.watchMode) {
-            setTimeout(() => this.startNextGame(), 1000);
-        }
     },
 
     createSeries: function(teamA, teamB) {
@@ -75,8 +81,14 @@ const Playoffs = {
         };
     },
 
+    // --- CONTROLS ---
     toggleWatchMode: function() {
         this.watchMode = !this.watchMode;
+        // Cancel any pending auto-advance so user doesn't get surprised
+        if (this.autoAdvanceTimer) {
+            clearTimeout(this.autoAdvanceTimer);
+            this.autoAdvanceTimer = null;
+        }
         if (!this.watchMode) faceoffPauseUntil = 0;
     },
     
@@ -85,13 +97,33 @@ const Playoffs = {
         else this.viewMode = "bracket";
     },
 
+    cycleRunMode: function() {
+        const modes = ["GAME", "SERIES", "ROUND", "FULL"];
+        let idx = modes.indexOf(this.runMode);
+        idx = (idx + 1) % modes.length;
+        this.runMode = modes[idx];
+        
+        // Cancel pending timers to be safe when switching modes
+        if (this.autoAdvanceTimer) {
+            clearTimeout(this.autoAdvanceTimer);
+            this.autoAdvanceTimer = null;
+        }
+    },
+
     // 3. START NEXT GAME
     startNextGame: function() {
+        // Clear any lingering timer
+        if (this.autoAdvanceTimer) {
+            clearTimeout(this.autoAdvanceTimer);
+            this.autoAdvanceTimer = null;
+        }
+
         const roundArr = this.getCurrentRoundArray();
         
         let foundSeries = null;
         let attempts = 0;
 
+        // Find the next series that isn't finished
         while(attempts < roundArr.length) {
             const s = roundArr[this.seriesRotationIndex];
             if (s.winner === null) {
@@ -103,15 +135,17 @@ const Playoffs = {
             attempts++;
         }
 
+        // If no active series found in this round, advance to next round
         if (!foundSeries) {
             this.advanceRound();
             return;
         }
 
         this.activeSeries = foundSeries;
-
+        
+        // Setup Matchup
         const gameNum = foundSeries.winsHigh + foundSeries.winsLow + 1;
-        const isHomeIce = [1, 2, 5, 7].includes(gameNum);
+        const isHomeIce = [1, 2, 5, 7].includes(gameNum); // NHL 2-2-1-1-1 Format
 
         const homeId = isHomeIce ? foundSeries.highSeed : foundSeries.lowSeed;
         const visitorId = isHomeIce ? foundSeries.lowSeed : foundSeries.highSeed;
@@ -123,6 +157,7 @@ const Playoffs = {
         Team0_Strategy = Strategies[visitorId];
         Team1_Strategy = Strategies[homeId];
 
+        // Apply Colors
         if (Team0_Strategy.colors) {
             TEAM0_COLOR = Team0_Strategy.colors.main;
             TEAM0_COLOR_HAS_PUCK = Team0_Strategy.colors.secondary;
@@ -142,6 +177,7 @@ const Playoffs = {
 
     // 4. THE GAME LOOP
     runGameTick: function(now) {
+        // --- WATCH MODE RENDER THROTTLE ---
         if (this.watchMode) {
             if (now - this.lastFrameTime < 16) {
                 if (!TRAINING_MODE || WATCH_MODE) {
@@ -153,12 +189,14 @@ const Playoffs = {
             this.lastFrameTime = now;
         }
 
+        // --- SPEED MULTIPLIER ---
         const loops = this.watchMode ? 1 : this.speedMult;
 
         for (let i = 0; i < loops; i++) {
             const isPaused = isResetActive() || performance.now() < faceoffPauseUntil;
 
             if (isPaused) {
+                // Handling Timers (Goals, Whistles, etc.)
                 if (this.watchMode) {
                     if (whistleEndTimer && now >= whistleEndTimer) {
                         whistleEndTimer = null; doFaceoffReset();
@@ -191,7 +229,8 @@ const Playoffs = {
                         }
                     }
                 }
-
+                
+                // Allow physics during goal celebrations
                 if (isGoalCelebrationActive()) {
                     puck.update();
                     collideCircleWithRink(puck, puck.r, 0.8);
@@ -200,6 +239,7 @@ const Playoffs = {
                 }
             } 
             else {
+                // Standard Gameplay
                 puck.update();
                 if (typeof updateDroppedSticks === 'function') updateDroppedSticks();
                 checkOffsides();
@@ -207,15 +247,12 @@ const Playoffs = {
                 resolveGoalCollisions(puck);
                 checkGoalieHarassment();
                 checkNetPinning();
-
                 if (puckEscapedRink()) handlePuckEscape();
                 if (puckStealCooldown > 0) puckStealCooldown--;
-
                 checkGoal();
-
-                if (detectPuckStuckInNet()) {
-                    whistle("Net Mesh Stoppage");
-                    if (this.watchMode) break; 
+                if (detectPuckStuckInNet()) { 
+                    whistle("Net Mesh Stoppage"); 
+                    if(this.watchMode) break; 
                 }
 
                 for (const p of players) {
@@ -227,10 +264,7 @@ const Playoffs = {
                 resolvePlayerCollisions();
 
                 timeRemaining -= (1/60); 
-                
-                if (timeRemaining <= 0) {
-                    this.handlePeriodEndWarp();
-                }
+                if (timeRemaining <= 0) this.handlePeriodEndWarp();
             }
 
             if (gameState === 'gameover') {
@@ -239,32 +273,41 @@ const Playoffs = {
             }
         }
 
+        // --- RENDER (Watch or Warp Info) ---
         if (this.watchMode) {
             if (!TRAINING_MODE || WATCH_MODE) {
                 renderFrame();
                 this.drawGameFooter(); 
             }
         } else {
-            // WARP RENDER
+            // WARP SCREEN
             ctx.fillStyle = "#000"; ctx.fillRect(0,0,W,H);
             ctx.fillStyle = "#fff"; ctx.textAlign = "center";
             ctx.textBaseline = "middle";
-            
             ctx.font = "20px Arial";
             ctx.fillText("SIMULATING PLAYOFFS...", W/2, H/2 - 40);
             
             const s = this.activeSeries;
             const gNum = s.winsHigh + s.winsLow + 1;
-            const code0 = Team0_Strategy.code;
-            const code1 = Team1_Strategy.code;
-
-            ctx.font = "bold 40px Monospace";
-            ctx.fillStyle = "#ffff00";
-            ctx.fillText(`${code0}  ${scoreTeam0} - ${scoreTeam1}  ${code1}`, W/2, H/2 + 10);
             
+            // Safety check in case activeSeries is null briefly
+            if (s) {
+                const code0 = Team0_Strategy.code;
+                const code1 = Team1_Strategy.code;
+
+                ctx.font = "bold 40px Monospace";
+                ctx.fillStyle = "#ffff00";
+                ctx.fillText(`${code0}  ${scoreTeam0} - ${scoreTeam1}  ${code1}`, W/2, H/2 + 10);
+                
+                ctx.font = "14px monospace";
+                ctx.fillStyle = "#888";
+                ctx.fillText(`${s.highName} vs ${s.lowName} | Game ${gNum}`, W/2, H/2 + 50);
+            }
+            
+            // Draw Run Mode in Warp Screen
             ctx.font = "14px monospace";
-            ctx.fillStyle = "#888";
-            ctx.fillText(`${s.highName} vs ${s.lowName} | Game ${gNum}`, W/2, H/2 + 50);
+            ctx.fillStyle = "#00ff00";
+            ctx.fillText(`Run Mode: ${this.runMode}`, W/2, H - 50);
         }
     },
 
@@ -293,6 +336,123 @@ const Playoffs = {
         }
     },
 
+    reportGameResult: function(scoreVisitor, scoreHome) {
+        const s = this.activeSeries;
+        if (!s) return;
+
+        // Record Stats
+        const gameCount = s.winsHigh + s.winsLow + 1;
+        const visCode = Team0_Strategy.code;
+        const homeCode = Team1_Strategy.code;
+        const isOT = currentPeriod > 3;
+        const otTag = isOT ? " (OT)" : "";
+        
+        const resultString = `${gameCount}: ${visCode} ${scoreVisitor} ${homeCode} ${scoreHome}${otTag}`;
+        s.games.push(resultString);
+
+        const winnerId = (scoreVisitor > scoreHome) ? Team0_Strategy.id : Team1_Strategy.id;
+
+        if (winnerId === s.highSeed) s.winsHigh++;
+        else s.winsLow++;
+
+        // Check for Series Win
+        if (s.winsHigh === 4) s.winner = s.highSeed;
+        if (s.winsLow === 4) s.winner = s.lowSeed;
+
+        gameState = "playoff_bracket";
+        
+        // --- AUTO ADVANCE LOGIC ---
+        this.checkAutoAdvance(s);
+    },
+
+    // 5. THE NEW BRAIN: DECIDE IF WE STOP OR GO
+    checkAutoAdvance: function(finishedSeries) {
+        let shouldStop = false;
+
+        // Mode C: STOP AFTER EVERY GAME
+        if (this.runMode === "GAME") {
+            shouldStop = true;
+        }
+        
+        // Mode B: STOP IF SERIES JUST FINISHED
+        else if (this.runMode === "SERIES") {
+            if (finishedSeries.winner !== null) shouldStop = true;
+        }
+
+        // Mode A: STOP IF ROUND JUST FINISHED
+        else if (this.runMode === "ROUND") {
+            // Check if all series in current round are done
+            const roundArr = this.getCurrentRoundArray();
+            const allDone = roundArr.every(s => s.winner !== null);
+            if (allDone) shouldStop = true;
+        }
+
+        // Mode 1: FULL (Only stop at champion, handled in advanceRound)
+        else if (this.runMode === "FULL") {
+            shouldStop = false;
+        }
+
+        if (shouldStop) {
+            // We stop. User must press SPACE to continue.
+            this.autoAdvanceTimer = null;
+        } else {
+            // We continue. Set a delay based on Watch Mode.
+            // Watch Mode = 3s delay (so you can see the bracket update)
+            // Sim Mode = 0.5s delay (so you can briefly see the result)
+            const delay = this.watchMode ? 3000 : 200;
+            
+            this.autoAdvanceTimer = setTimeout(() => {
+                this.startNextGame();
+            }, delay);
+        }
+    },
+
+    advanceRound: function() {
+        this.seriesRotationIndex = 0;
+
+        if (this.round === 1) {
+            const r1 = this.bracket.round1;
+            this.bracket.round2 = [
+                this.createSeries(this.getTeam(r1[0].winner), this.getTeam(r1[3].winner)),
+                this.createSeries(this.getTeam(r1[1].winner), this.getTeam(r1[2].winner))
+            ];
+            this.round = 2;
+        } 
+        else if (this.round === 2) {
+            const r2 = this.bracket.round2;
+            this.bracket.round3 = [
+                this.createSeries(this.getTeam(r2[0].winner), this.getTeam(r2[1].winner))
+            ];
+            this.round = 3;
+        } 
+        else {
+            this.champion = this.bracket.round3[0].winner;
+            gameState = "champion_screen"; 
+            return; // Always stop at champion
+        }
+
+        gameState = "playoff_bracket";
+
+        // If we just advanced a round, check if we need to auto-start the next one
+        if (this.runMode === "FULL") {
+             const delay = this.watchMode ? 3000 : 200;
+             this.autoAdvanceTimer = setTimeout(() => this.startNextGame(), delay);
+        }
+    },
+
+    getTeam: function(id) {
+        return { id: id, code: Strategies[id].code };
+    },
+
+    getCurrentRoundArray: function() {
+        if (this.round === 1) return this.bracket.round1;
+        if (this.round === 2) return this.bracket.round2;
+        return this.bracket.round3;
+    },
+
+    // =========================================================
+    // UI UPDATES
+    // =========================================================
     drawGameFooter: function() {
         if (!this.activeSeries) return;
         
@@ -324,9 +484,12 @@ const Playoffs = {
         ctx.textAlign = "center";
         ctx.fillStyle = "#ffff00";
         ctx.fillText(`${Team0_Strategy.code}  ${scoreTeam0}  -  ${scoreTeam1}  ${Team1_Strategy.code}`, W/2, H - 15);
+        
+        // Show Run Mode in Footer too
+        ctx.textAlign = "right"; ctx.fillStyle = "#00ff00"; ctx.font = "11px Arial";
+        ctx.fillText(`MODE: ${this.runMode}`, W - 100, H - 15);
 
         ctx.font = "12px Monospace";
-        ctx.textAlign = "right";
         ctx.fillStyle = "#aaa";
         const pTxt = currentPeriod > 3 ? "OT" : "P" + currentPeriod;
         ctx.fillText(`${pTxt} | ${Math.floor(timeRemaining)}s`, W - 20, H - 15);
@@ -334,81 +497,12 @@ const Playoffs = {
         ctx.restore();
     },
 
-    reportGameResult: function(scoreVisitor, scoreHome) {
-        const s = this.activeSeries;
-        if (!s) return;
-
-        const gameCount = s.winsHigh + s.winsLow + 1;
-        const visCode = Team0_Strategy.code;
-        const homeCode = Team1_Strategy.code;
-        const isOT = currentPeriod > 3;
-        const otTag = isOT ? " (OT)" : "";
-        
-        const resultString = `${gameCount}: ${visCode} ${scoreVisitor} ${homeCode} ${scoreHome}${otTag}`;
-        s.games.push(resultString);
-
-        const winnerId = (scoreVisitor > scoreHome) ? Team0_Strategy.id : Team1_Strategy.id;
-
-        if (winnerId === s.highSeed) s.winsHigh++;
-        else s.winsLow++;
-
-        if (s.winsHigh === 4) s.winner = s.highSeed;
-        if (s.winsLow === 4) s.winner = s.lowSeed;
-
-        gameState = "playoff_bracket";
-        
-        if (!this.watchMode) {
-            setTimeout(() => {
-                if (gameState === "playoff_bracket") {
-                    this.startNextGame();
-                }
-            }, 100); 
-        }
-    },
-
-    advanceRound: function() {
-        this.seriesRotationIndex = 0;
-
-        if (this.round === 1) {
-            const r1 = this.bracket.round1;
-            this.bracket.round2 = [
-                this.createSeries(this.getTeam(r1[0].winner), this.getTeam(r1[3].winner)),
-                this.createSeries(this.getTeam(r1[1].winner), this.getTeam(r1[2].winner))
-            ];
-            this.round = 2;
-            gameState = "playoff_bracket";
-            if (!this.watchMode) setTimeout(() => this.startNextGame(), 100);
-        } 
-        else if (this.round === 2) {
-            const r2 = this.bracket.round2;
-            this.bracket.round3 = [
-                this.createSeries(this.getTeam(r2[0].winner), this.getTeam(r2[1].winner))
-            ];
-            this.round = 3;
-            gameState = "playoff_bracket";
-            if (!this.watchMode) setTimeout(() => this.startNextGame(), 100);
-        } 
-        else {
-            this.champion = this.bracket.round3[0].winner;
-            gameState = "champion_screen"; 
-        }
-    },
-
-    getTeam: function(id) {
-        return { id: id, code: Strategies[id].code };
-    },
-
-    getCurrentRoundArray: function() {
-        if (this.round === 1) return this.bracket.round1;
-        if (this.round === 2) return this.bracket.round2;
-        return this.bracket.round3;
-    },
-
     // =========================================================
     // VISUALIZATION (CENTERED FINAL)
     // =========================================================
     drawBracket: function(ctx, w, h) {
         
+        // 1. STANDINGS VIEW (RESTORED FROM PREVIOUS UPLOAD)
         if (this.viewMode === "standings" && this.finalStandingsReference) {
             ctx.fillStyle = "#000"; ctx.fillRect(0,0,w,h);
             ctx.textAlign = "center"; ctx.fillStyle = "#fff"; ctx.font = "bold 24px Arial";
@@ -452,6 +546,7 @@ const Playoffs = {
             return;
         }
 
+        // 2. BRACKET VIEW
         ctx.fillStyle = "#111";
         ctx.fillRect(0, 0, w, h);
         
@@ -541,31 +636,46 @@ const Playoffs = {
             drawSeries(r2[1], w - 380, 220);
         }
 
-        // --- CENTERED FINAL (The Big Move) ---
+        // --- CENTERED FINAL ---
         const r3 = this.bracket.round3;
         if (r3.length > 0) {
-            // Draw in the exact center of the screen
             drawSeries(r3[0], w/2 - 75, 230); 
         }
         
-        ctx.fillStyle = "#888";
-        ctx.font = "16px Arial";
+        // 3. FOOTER UI (Updated with Run Modes)
+        ctx.fillStyle = "#444";
+        ctx.fillRect(0, h - 40, w, 40);
+        
+        // Mode Indicator
+        ctx.textAlign = "left";
+        ctx.font = "bold 14px Arial";
+        
+        const modeColor = this.runMode === "FULL" ? "#ff0000" : (this.runMode === "GAME" ? "#ffff00" : "#00ff00");
+        ctx.fillStyle = "#ccc";
+        ctx.fillText("RUN MODE: ", 20, h - 15);
+        ctx.fillStyle = modeColor;
+        ctx.fillText(this.runMode, 110, h - 15);
+
+        // Status / Instructions
         ctx.textAlign = "center";
+        ctx.fillStyle = "#fff";
         
         if (gameState === "champion_screen") {
              ctx.save();
              ctx.fillStyle = "#ffff00";
              ctx.font = "bold 40px Arial";
-             // Reverted to Bottom Position
              ctx.fillText(Strategies[this.champion].teamName + " WIN THE CUP!", w/2, h - 80);
              ctx.restore();
 
              ctx.fillStyle = "#fff";
              ctx.font = "20px Arial";
-             ctx.fillText("Press TAB to View Standings | ESC to Menu", w/2, h - 40);
+             ctx.fillText("Press TAB to View Standings | ESC to Menu", w/2, h - 15);
         } else {
-             if (this.watchMode) ctx.fillText("Press W to Warp | SPACE for Next Game", w/2, h - 25);
-             else ctx.fillText("Auto-Simulating... Press W to Watch", w/2, h - 25);
+            if (this.autoAdvanceTimer) {
+                ctx.fillText("Auto-Playing... Press SPACE to Pause", w/2, h - 15);
+            } else {
+                ctx.fillText("Press SPACE for Next Game | [M] Change Mode | [W] Watch/Sim", w/2, h - 15);
+            }
         }
     }
 };
