@@ -1163,6 +1163,21 @@ document.addEventListener("keydown", (e) => {
         // 3. Training Warp
         WATCH_MODE = !WATCH_MODE;
     }
+        if (gameState === "playoff_bracket" || gameState === "playoffs") {
+        if (e.code === "KeyM") {
+            Playoffs.cycleRunMode();
+        }
+        if (e.code === "Space") {
+             // If auto-timer is running, Space pauses it.
+             // If paused, Space starts the next game.
+             if (Playoffs.autoAdvanceTimer) {
+                 clearTimeout(Playoffs.autoAdvanceTimer);
+                 Playoffs.autoAdvanceTimer = null;
+             } else {
+                 if (gameState === "playoff_bracket") Playoffs.startNextGame();
+             }
+        }
+    }
 });
 
 
@@ -8458,6 +8473,7 @@ document.addEventListener("keydown", e => {
 
 </body>
 </html>
+
 
 
 
