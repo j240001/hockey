@@ -73,7 +73,7 @@ const Tournament = {
             }
         }
 
-        const TARGET_GP = 82;
+        const TARGET_GP = 12;
         const balancedMatches = [];
         const teamCounts = {};
         keys.forEach(k => teamCounts[k] = 0);
