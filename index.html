@@ -8401,20 +8401,31 @@ const Practice = {
 
 
 
-// --- INPUT HOOK ---
+// --- INPUT HOOK  ---
 document.addEventListener("keydown", e => {
     
     // 1. GLOBAL CAPTURE KEY (Works in Game OR Pause)
     if (e.key === 'c' || e.key === 'C') {
-        // If we are playing (or paused mid-game), Capture!
+        // SAFETY: Disable "Capture" during competitive modes too
+        if (gameState === "tournament" || gameState === "playoffs") return;
+
         if (gameState === 'playing' || isPaused) {
             Practice.captureLiveState();
         }
         return;
     }
 
-    // 2. TOGGLE PRACTICE MODE
+    // 2. TOGGLE PRACTICE MODE (*** RESTRICTED ***)
     if (e.key === 'm' || e.key === 'M') {
+        
+        // RESTRICTION: Disable Practice Mode during competitive play.
+        // This ensures 'M' does NOTHING here, so the Playoff Engine can use it (or ignore it).
+        if (gameState === "tournament" || gameState === "tournament_over" ||
+            gameState === "playoffs" || gameState === "playoff_bracket" || 
+            gameState === "champion_screen") {
+            return; 
+        }
+
         Practice.toggle();
         return;
     }
@@ -8432,13 +8443,10 @@ document.addEventListener("keydown", e => {
         if (e.key === "ArrowLeft")  Practice.moveSelection(-speed, 0);
         if (e.key === "ArrowRight") Practice.moveSelection(speed, 0);
         
-        // Update the snapshot if we move things manually
         if (isPaused && (e.key.startsWith("Arrow"))) {
-             Practice.captureLiveState(); // Re-save the edited positions
+             Practice.captureLiveState(); 
         }
     }
-
-    // ... [Existing Pause 'P' logic remains here] ...
 });
 
 
@@ -8450,6 +8458,7 @@ document.addEventListener("keydown", e => {
 
 </body>
 </html>
+
 
 
 
