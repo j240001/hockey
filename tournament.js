@@ -49,7 +49,7 @@ const Tournament = {
         const numTeams = teams.length;
         const gamesPerCycle = numTeams - 1; 
         const half = numTeams / 2;
-        const TARGET_GAMES = 82;
+        const TARGET_GAMES = 12;
         let seasonLoops = Math.ceil(TARGET_GAMES / gamesPerCycle);
         if (seasonLoops < 1) seasonLoops = 1;
 
