@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Phased Ambience Mixer</title>
+    <title>Floating Ambience Mixer</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
     <style>
         body { background: #222; color: #fff; font-family: sans-serif; text-align: center; padding: 40px; }
@@ -9,42 +9,47 @@
         button { padding: 15px 30px; font-size: 20px; background: #00d2ff; border: none; cursor: pointer; font-weight: bold; border-radius: 5px; margin-bottom: 40px; }
         button:disabled { background: #444; color: #888; cursor: default; }
 
-        .track { background: #333; padding: 20px; margin: 10px auto; width: 500px; border-radius: 10px; display: flex; align-items: center; justify-content: space-between; }
+        .track { background: #333; padding: 20px; margin: 10px auto; width: 600px; border-radius: 10px; display: flex; align-items: center; justify-content: space-between; }
         
-        label { font-weight: bold; width: 100px; text-align: left; }
+        label { font-weight: bold; width: 80px; text-align: left; }
         input[type=range] { flex-grow: 1; margin: 0 20px; }
-        span { font-family: monospace; width: 50px; text-align: right; color: #00ff00; }
-        
-        .note { font-size: 12px; color: #aaa; margin-top: -15px; margin-bottom: 10px; display: block;}
+        .data { font-family: monospace; width: 140px; text-align: right; font-size: 12px; color: #aaa; }
+        .vol-txt { color: #00ff00; font-size: 14px; font-weight: bold; }
     </style>
 </head>
 <body>
 
-    <h1>🎚️ Phased Crowd Mixer</h1>
-    <p>Each layer starts at a different time offset to prevent repetition.</p>
+    <h1>🌫️ "Floating" Crowd Mixer</h1>
+    <p>Random Start + Micro-Speed Drift = Infinite Texture</p>
 
-    <button id="btn" onclick="init()">START PHASED ENGINE</button>
+    <button id="btn" onclick="init()">START RANDOMIZED ENGINE</button>
 
     <div class="track">
         <label>LOW</label>
         <input type="range" min="0" max="100" value="100" oninput="setVol('low', this.value)">
-        <span id="txt-low">100%</span>
+        <div class="data">
+            <span id="info-low">Waiting...</span><br>
+            <span id="txt-low" class="vol-txt">100%</span>
+        </div>
     </div>
-    <span class="note">Starts at 0s</span>
 
     <div class="track">
         <label>MID</label>
         <input type="range" min="0" max="100" value="0" oninput="setVol('mid', this.value)">
-        <span id="txt-mid">0%</span>
+        <div class="data">
+            <span id="info-mid">Waiting...</span><br>
+            <span id="txt-mid" class="vol-txt">0%</span>
+        </div>
     </div>
-    <span class="note">Starts at 17s (Offset)</span>
 
     <div class="track">
         <label>HIGH</label>
         <input type="range" min="0" max="100" value="0" oninput="setVol('high', this.value)">
-        <span id="txt-high">0%</span>
+        <div class="data">
+            <span id="info-high">Waiting...</span><br>
+            <span id="txt-high" class="vol-txt">0%</span>
+        </div>
     </div>
-    <span class="note">Starts at 34s (Offset)</span>
 
     <script>
         // 1. SETUP
@@ -59,6 +64,7 @@
         });
 
         var idLow, idMid, idHigh;
+        const LENGTH = 50.9;
 
         // 2. START ENGINE
         function init() {
@@ -72,21 +78,35 @@
             idMid  = sound.play('mid');
             idHigh = sound.play('high');
 
-            // --- DE-PHASING MAGIC ---
-            // seek(time, id) jumps to a specific second within the sprite
-            sound.seek(17.0, idMid);  // Mid jumps 17 seconds ahead
-            sound.seek(34.0, idHigh); // High jumps 34 seconds ahead
+            // --- THE FLOATING LOGIC ---
+            applyFloat('low', idLow);
+            applyFloat('mid', idMid);
+            applyFloat('high', idHigh);
 
-            // Apply initial volumes
+            // Apply volumes
             sound.volume(1.0, idLow); 
             sound.volume(0.0, idMid); 
             sound.volume(0.0, idHigh); 
         }
 
+        function applyFloat(name, id) {
+            // 1. RANDOM START: Pick a random second between 0 and 50
+            var startPoint = Math.random() * LENGTH;
+            sound.seek(startPoint, id);
+
+            // 2. RATE DRIFT: Random speed between 0.98x and 1.02x
+            // This ensures they slide past each other constantly.
+            var drift = 0.98 + (Math.random() * 0.04); 
+            sound.rate(drift, id);
+
+            // Update UI
+            document.getElementById('info-' + name).innerText = 
+                "Start: " + startPoint.toFixed(1) + "s\nRate: " + drift.toFixed(3) + "x";
+        }
+
         // 3. VOLUME CONTROL
         function setVol(track, val) {
             if (!idLow) return; 
-
             var decimal = val / 100;
             
             if (track === 'low') {
