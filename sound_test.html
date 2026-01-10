@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Sprite Fix Test</title>
+    <style>
+        body { background: #111; color: #eee; font-family: sans-serif; text-align: center; padding: 50px; }
+        input[type=range] { width: 300px; margin: 20px; }
+        button { padding: 15px 30px; font-size: 18px; background: #00cc00; border: none; cursor: pointer; color: black; font-weight: bold; }
+        button:hover { background: #00ff00; }
+        .status { margin-top: 20px; font-family: monospace; color: #888; }
+        h1 { color: #ffcc00; }
+        #debug { color: #ff5555; margin-top: 20px; font-weight: bold;}
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
+</head>
+<body>
+
+    <h1>🔊 Remote Sprite Fix</h1>
+    <p>Loading: <code>aihockeygame.com/sprite.mp3</code></p>
+
+    <button id="startBtn" onclick="initAudio()">LOAD & PLAY</button>
+
+    <div id="controls" style="opacity: 0.3; pointer-events: none; margin-top: 30px;">
+        <label>Excitement Level</label><br>
+        <input type="range" id="slider" min="0" max="1" step="0.01" value="0" oninput="mix(this.value)">
+        <div class="status">
+            LOW: <span id="vLow">0.00</span> | 
+            MID: <span id="vMid">0.00</span> | 
+            HIGH: <span id="vHigh">0.00</span>
+        </div>
+    </div>
+    
+    <div id="debug"></div>
+
+    <script>
+        // --- SETTINGS ---
+        const SOUND_URL = 'https://aihockeygame.com/sprite.mp3';
+        const CLIP_LENGTH = 50912; // 50.912 seconds
+
+        let crowd;
+        let idLow, idMid, idHigh;
+
+        function initAudio() {
+    // 1. SAFETY LOCK: If audio is already loading/loaded, STOP.
+    // This prevents the "Too Many AudioContexts" error.
+    if (crowd) return; 
+
+    document.getElementById('startBtn').disabled = true; // Gray out the button
+    document.getElementById('startBtn').innerText = "Downloading...";
+    document.getElementById('debug').innerText = "";
+
+    crowd = new Howl({
+        src: [SOUND_URL],
+        html5: false, 
+        format: ['mp3'], 
+        sprite: {
+            low:  [0,               CLIP_LENGTH, true],
+            mid:  [CLIP_LENGTH,     CLIP_LENGTH, true],
+            high: [CLIP_LENGTH * 2, CLIP_LENGTH, true]
+        },
+        onload: () => {
+            console.log("Audio Loaded!");
+            document.getElementById('startBtn').style.display = 'none';
+            document.getElementById('controls').style.opacity = '1';
+            document.getElementById('controls').style.pointerEvents = 'auto';
+
+            idLow  = crowd.play('low');
+            idMid  = crowd.play('mid');
+            idHigh = crowd.play('high');
+            
+            mix(0);
+        },
+        onloaderror: (id, err) => {
+            console.error("Load Error:", err);
+            // Re-enable button so you can try again if it actually failed
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('startBtn').innerText = "Retry";
+            crowd = null; // Reset the lock
+        }
+    });
+}
+
+        function mix(val) {
+            if (!crowd) return;
+            let e = parseFloat(val);
+
+            let volLow  = Math.max(0, 1.0 - (e * 1.5));
+            let volMid  = 0.6; 
+            let volHigh = Math.max(0, (e - 0.2) * 1.25);
+            if (volHigh > 1.0) volHigh = 1.0;
+
+            crowd.volume(volLow, idLow);
+            crowd.volume(volMid, idMid);
+            crowd.volume(volHigh, idHigh);
+
+            document.getElementById('vLow').innerText = volLow.toFixed(2);
+            document.getElementById('vMid').innerText = volMid.toFixed(2);
+            document.getElementById('vHigh').innerText = volHigh.toFixed(2);
+        }
+    </script>
+</body>
+</html>
