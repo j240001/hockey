@@ -1,33 +1,56 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Simple Audio Test</title>
+    <title>Phased Ambience Mixer</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
     <style>
-        body { background: #222; color: #fff; font-family: sans-serif; text-align: center; padding: 50px; }
-        input { width: 400px; margin-top: 20px; }
-        button { padding: 15px 30px; font-size: 20px; cursor: pointer; }
+        body { background: #222; color: #fff; font-family: sans-serif; text-align: center; padding: 40px; }
+        
+        button { padding: 15px 30px; font-size: 20px; background: #00d2ff; border: none; cursor: pointer; font-weight: bold; border-radius: 5px; margin-bottom: 40px; }
+        button:disabled { background: #444; color: #888; cursor: default; }
+
+        .track { background: #333; padding: 20px; margin: 10px auto; width: 500px; border-radius: 10px; display: flex; align-items: center; justify-content: space-between; }
+        
+        label { font-weight: bold; width: 100px; text-align: left; }
+        input[type=range] { flex-grow: 1; margin: 0 20px; }
+        span { font-family: monospace; width: 50px; text-align: right; color: #00ff00; }
+        
+        .note { font-size: 12px; color: #aaa; margin-top: -15px; margin-bottom: 10px; display: block;}
     </style>
 </head>
 <body>
 
-    <h1>Simple Additive Mixer</h1>
-    
-    <button id="btn" onclick="init()">START AUDIO</button>
-    
-    <br><br>
-    
-    <label>Excitement (0 to 100)</label><br>
-    <input type="range" min="0" max="100" value="0" oninput="mix(this.value)">
+    <h1>🎚️ Phased Crowd Mixer</h1>
+    <p>Each layer starts at a different time offset to prevent repetition.</p>
 
-    <p id="status">Waiting...</p>
+    <button id="btn" onclick="init()">START PHASED ENGINE</button>
+
+    <div class="track">
+        <label>LOW</label>
+        <input type="range" min="0" max="100" value="100" oninput="setVol('low', this.value)">
+        <span id="txt-low">100%</span>
+    </div>
+    <span class="note">Starts at 0s</span>
+
+    <div class="track">
+        <label>MID</label>
+        <input type="range" min="0" max="100" value="0" oninput="setVol('mid', this.value)">
+        <span id="txt-mid">0%</span>
+    </div>
+    <span class="note">Starts at 17s (Offset)</span>
+
+    <div class="track">
+        <label>HIGH</label>
+        <input type="range" min="0" max="100" value="0" oninput="setVol('high', this.value)">
+        <span id="txt-high">0%</span>
+    </div>
+    <span class="note">Starts at 34s (Offset)</span>
 
     <script>
         // 1. SETUP
-        // Using relative path to fix CORS
         var sound = new Howl({
-            src: ['sprite.mp3'],
-            html5: false, // Must be false for responsive looping
+            src: ['sprite.mp3'], 
+            html5: false,
             sprite: {
                 low:  [0,      50912, true],
                 mid:  [50912,  50912, true],
@@ -37,41 +60,47 @@
 
         var idLow, idMid, idHigh;
 
-        // 2. START (Runs Once)
+        // 2. START ENGINE
         function init() {
-            if (idLow) return; // Prevent double-clicking
+            if (idLow) return; 
 
             document.getElementById('btn').disabled = true;
-            document.getElementById('status').innerText = "Playing...";
+            document.getElementById('btn').innerText = "Running...";
 
-            // Play all 3 layers constantly
+            // Play all 3 tracks
             idLow  = sound.play('low');
             idMid  = sound.play('mid');
             idHigh = sound.play('high');
 
-            // Set initial mix (Low only)
-            mix(0);
+            // --- DE-PHASING MAGIC ---
+            // seek(time, id) jumps to a specific second within the sprite
+            sound.seek(17.0, idMid);  // Mid jumps 17 seconds ahead
+            sound.seek(34.0, idHigh); // High jumps 34 seconds ahead
+
+            // Apply initial volumes
+            sound.volume(1.0, idLow); 
+            sound.volume(0.0, idMid); 
+            sound.volume(0.0, idHigh); 
         }
 
-        // 3. MIXING LOGIC (The "Layer Cake")
-        function mix(val) {
-            if (!idLow) return;
+        // 3. VOLUME CONTROL
+        function setVol(track, val) {
+            if (!idLow) return; 
+
+            var decimal = val / 100;
             
-            var e = val / 100; // Convert 0-100 to 0.0-1.0
-
-            // LAYER 1 (Low): ALWAYS ON at 100%
-            // It provides the "body" of the sound.
-            sound.volume(1.0, idLow);
-
-            // LAYER 2 (Mid): Fades in linearly from 0% to 100%
-            sound.volume(e, idMid);
-
-            // LAYER 3 (High): Only starts fading in after 50% excitement
-            // Math: If e is 0.5, volume is 0. If e is 1.0, volume is 1.
-            var highVol = (e - 0.5) * 2;
-            if (highVol < 0) highVol = 0;
-            
-            sound.volume(highVol, idHigh);
+            if (track === 'low') {
+                sound.volume(decimal, idLow);
+                document.getElementById('txt-low').innerText = val + "%";
+            }
+            else if (track === 'mid') {
+                sound.volume(decimal, idMid);
+                document.getElementById('txt-mid').innerText = val + "%";
+            }
+            else if (track === 'high') {
+                sound.volume(decimal, idHigh);
+                document.getElementById('txt-high').innerText = val + "%";
+            }
         }
     </script>
 </body>
