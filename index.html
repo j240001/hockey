@@ -5000,8 +5000,8 @@ function updateGoalie(p) {
     if (puckInDefHalf) {
         // We use the CURRENT puck position. 
         // Geometry handles the lead because the goalie is closer to the pivot point (net).
-        const distPuckToNet = puck.x - defendX;
-        const distGoalieToNet = p.x - defendX;
+        const distPuckToNet = Math.abs(puck.x - defendX);
+        const distGoalieToNet = Math.abs(p.x - defendX);
 
         let ratio = distGoalieToNet / distPuckToNet;
         
