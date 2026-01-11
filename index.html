@@ -2883,13 +2883,9 @@ function shootPuck(player, power, targetOverride) {
         targetY = (Math.random() < 0.5) ? RY - 17 : RY + 17;
     }
 
-    // 4. CALCULATE DISTANCE & POWER BOOST
-    const dist = Math.hypot(targetX - launchX, targetY - launchY);
-    
-    // Power scale to fight friction (Blue line shots get +6 speed)
+    // 4. CALCULATE POWER (Honest Physics)
+    // What you set is what you get. No distance boosts.
     let shotPower = (power !== undefined) ? power : (11 + Math.random() * 2);
-    if (dist > 300) shotPower += 6.0; 
-    else if (dist > 150) shotPower += 3.0;
 
     // 5. BEHIND NET SAFETY (Unchanged)
     const behind = fixBehindNetShotDir(player);
