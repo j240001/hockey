@@ -2620,35 +2620,31 @@ const puck = {
                 }
                 if (hit) break;
 
-                // Goalie Interaction Loop
+                // Goalie Interaction Loop (The Dual-Cube System)
                 const now = performance.now();
                 for (const g of players) {
                     if (g.type !== "goalie") continue;
                     if (this.ignoreGoalieUntil && now < this.ignoreGoalieUntil) continue;
 
-                    const d = Math.hypot(this.x - g.x, this.y - g.y);
-                    const minD = g.size/2 + this.r;
-
-                    if (d < minD && this.ownerId === null) {
-                        // (Goalie Save Logic - Unchanged)
-                        if (g.saveCooldown <= 0) { g.saves++; g.saveCooldown = 60; }
-                        const shotSpeed = Math.hypot(this.vx, this.vy);
+                    // Use our new Dual-Cube Physics
+                    if (checkPuckGoalieCollision(this, g) && this.ownerId === null) {
                         
-                        // Catch Logic
+                        if (g.saveCooldown <= 0) { 
+                            g.saves++; 
+                            g.saveCooldown = 60; 
+                        }
+
+                        // Catch Logic (Freeze the puck if it's moving slow enough)
+                        const shotSpeed = Math.hypot(this.vx, this.vy);
                         let catchChance = Math.max(0, 0.6 - (shotSpeed * 0.3));
+                        
                         if (Math.random() < catchChance) {
                             this.ownerId = g.id; this.vx = 0; this.vy = 0;
-                            goalieFreezeTimer = performance.now(); 
+                            if (typeof goalieFreezeTimer !== 'undefined') goalieFreezeTimer = performance.now(); 
                             return;
                         }
                         
-                        // Rebound Logic
                         this.ignoreGoalieUntil = now + 250;
-                        const nx = (this.x - g.x) / d; const ny = (this.y - g.y) / d;
-                        this.x = g.x + nx * minD; this.y = g.y + ny * minD;
-                        const dot = this.vx * nx + this.vy * ny;
-                        this.vx -= 2 * dot * nx; this.vy -= 2 * dot * ny;
-                        this.vx *= 0.5; this.vy *= 0.5;
                     }
                 }
             }
@@ -4940,6 +4936,92 @@ function updateAISkater(p) {
 }
 
 
+
+function checkPuckGoalieCollision(puck, g) {
+    // --- 1. CONFIGURATION (Tune these numbers!) ---
+    const padDepth  = 8;    // How "thick" the pads are (Front to Back)
+    const padWidth  = 13;   // Width of ONE pad
+    const gapWidth  = 5.0;  // The Five-Hole (Puck is diameter 3.0, so this fits easily)
+    const fwdOffset = 6;    // How far "Forward" from the center point the pads sit
+
+    // --- 2. TRANSFORM TO LOCAL SPACE ---
+    // We rotate the world around the goalie so calculations are easy (AABB)
+    const dx = puck.x - g.x;
+    const dy = puck.y - g.y;
+    const cos = Math.cos(-g.angle); 
+    const sin = Math.sin(-g.angle);
+    
+    // localX = Distance in front of goalie (Forward/Back)
+    // localY = Distance to the side (Left/Right)
+    const localX = dx * cos - dy * sin; 
+    const localY = dx * sin + dy * cos;
+
+    // --- 3. DEFINE THE TWO BOXES (In Local Space) ---
+    // Left Pad is at negative Y, Right Pad is at positive Y
+    const leftPadY  = -(gapWidth/2 + padWidth/2);
+    const rightPadY = +(gapWidth/2 + padWidth/2);
+    
+    // Both pads are at the same X (Forward offset)
+    const padCenterX = fwdOffset;
+
+    // --- 4. CHECK COLLISION HELPER ---
+    function checkPad(pX, pY, boxX, boxY, w, h) {
+        // Simple AABB vs Circle logic
+        // Find closest point on the box to the puck center
+        const closestX = Math.max(boxX - w/2, Math.min(pX, boxX + w/2));
+        const closestY = Math.max(boxY - h/2, Math.min(pY, boxY + h/2));
+        
+        const dX = pX - closestX;
+        const dY = pY - closestY;
+        const distSq = dX*dX + dY*dY;
+        
+        if (distSq < (puck.r * puck.r)) {
+            // HIT! Return the normal (direction to push out)
+            const dist = Math.sqrt(distSq);
+            return {
+                nx: (dist > 0) ? dX / dist : 1, // Default forward if inside
+                ny: (dist > 0) ? dY / dist : 0,
+                pen: puck.r - dist // Penetration depth
+            };
+        }
+        return null;
+    }
+
+    // Check LEFT Pad
+    const hitL = checkPad(localX, localY, padCenterX, leftPadY, padDepth, padWidth);
+    // Check RIGHT Pad
+    const hitR = checkPad(localX, localY, padCenterX, rightPadY, padDepth, padWidth);
+
+    // Pick the hit (or the stronger hit if both somehow happen)
+    const hit = hitL || hitR; 
+
+    if (hit) {
+        // --- 5. RESOLVE COLLISION ---
+        
+        // Rotate the local Normal back to World Space
+        const worldCos = Math.cos(g.angle);
+        const worldSin = Math.sin(g.angle);
+        
+        const worldNx = hit.nx * worldCos - hit.nx * worldSin; // Wait, rotation formula check below
+        const wx = hit.nx * worldCos - hit.ny * worldSin;
+        const wy = hit.nx * worldSin + hit.ny * worldCos;
+
+        // Reflect Velocity: v' = v - 2(v.n)n
+        const dot = puck.vx * wx + puck.vy * wy;
+        
+        // BOUNCE!
+        puck.vx = (puck.vx - 2 * dot * wx) * 0.5; // 0.5 dampening (soft pads)
+        puck.vy = (puck.vy - 2 * dot * wy) * 0.5;
+        
+        // Push Out (Prevent sticking)
+        puck.x += wx * (hit.pen + 0.5);
+        puck.y += wy * (hit.pen + 0.5);
+
+        return true;
+    }
+
+    return false;
+}
 
 
 function updateGoalie(p) {
