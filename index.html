@@ -1822,10 +1822,10 @@ function collideCircleWithRink(obj, radius, restitution = 0.8) {
             // +++ AUDIO TRIGGER +++ 
             // Only play if it's the puck AND it hit hard enough
             if (obj === puck) {
-                const impactSpeed = Math.hypot(obj.vx, obj.vy);
-                if (impactSpeed > 2.0) { // Don't play on tiny nudges
-                    let vol = Math.min(1.0, impactSpeed * 0.1); 
-                    // Use the wrapper to handle mute logic automatically
+                const impactIntensity = Math.abs(dot); // <--- THIS IS THE MAGIC VARIABLE
+                
+                if (impactIntensity > 2.0) { 
+                    let vol = Math.min(1.0, impactIntensity * 0.1); 
                     playGameSound('puck_board', vol);
                 }
             }
