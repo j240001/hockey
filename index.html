@@ -8490,10 +8490,9 @@ document.addEventListener("keydown", e => {
 // AUDIO ENGINE (Howler.js Integration)
 // =========================================================
 var sound = new Howl({
-    src: ['sprite.mp3'], // Make sure this file is in the same folder!
+    src: ['sprite.mp3'], 
     volume: 1.0,
     sprite: {
-        // [Start, Duration, Loop?]
         crowd_bed:  [0, 152737, true], 
         goal_horn:  [152737, 3105],
         puck_board: [155842, 416],
@@ -8501,44 +8500,59 @@ var sound = new Howl({
     }
 });
 
-// Global ID to track the crowd loop so we can fade it
-let crowdLoopId = null;
+// Store all layer IDs so we can fade them together
+let crowdLayers = [];
 
 function initAudio() {
-    // Start the crowd loop immediately (it will auto-loop)
-    // We start it at 0 volume and fade it in
-    if (!crowdLoopId) {
-        crowdLoopId = sound.play('crowd_bed');
-        sound.volume(0, crowdLoopId);
-        sound.fade(0, 0.4, 2000, crowdLoopId); // Fade to 40% volume over 2s
-    }
+    // Only initialize if we haven't already
+    if (crowdLayers.length > 0) return;
+
+    // --- LAYER 1: The Foundation (Starts at 0s) ---
+    let id1 = sound.play('crowd_bed');
+    sound.seek(0, id1);
+    sound.volume(0, id1);           // Start silent
+    sound.fade(0, 0.15, 2000, id1); // Fade to 15%
+    crowdLayers.push(id1);
+
+    // --- LAYER 2: The Widener (Starts at 7s) ---
+    // Offsetting the start time prevents "flanging" (robotic sound)
+    let id2 = sound.play('crowd_bed');
+    sound.seek(7.0, id2);           // Jump 7 seconds into the loop
+    sound.rate(1.01, id2);          // 1% faster (prevents loops from syncing up)
+    sound.volume(0, id2);
+    sound.fade(0, 0.15, 2000, id2);
+    crowdLayers.push(id2);
+
+    // --- LAYER 3: The Texture (Starts at 15s) ---
+    let id3 = sound.play('crowd_bed');
+    sound.seek(15.0, id3);          // Jump 15 seconds into the loop
+    sound.rate(0.99, id3);          // 1% slower (adds bass/depth)
+    sound.volume(0, id3);
+    sound.fade(0, 0.15, 2000, id3);
+    crowdLayers.push(id3);
 }
 
-// Helper to handle Replay Ducking (The "Buzzing" Fix)
+// Helper to handle Replay Ducking for ALL layers
 function setCrowdReplayMode(isReplay) {
-    if (!crowdLoopId) return;
-    
-    if (isReplay) {
-        // Duck volume down to 10% instantly
-        sound.fade(0.4, 0.1, 300, crowdLoopId); 
-    } else {
-        // Fade back up to 40%
-        sound.fade(0.1, 0.4, 1000, crowdLoopId);
-    }
+    crowdLayers.forEach(id => {
+        if (isReplay) {
+            // Duck all layers down to 5%
+            sound.fade(0.15, 0.05, 300, id); 
+        } else {
+            // Bring all layers back to 15%
+            sound.fade(0.05, 0.15, 1000, id);
+        }
+    });
 }
 
-// Initialize audio on first user interaction (browser requirement)
+// Initialize audio on first user interaction
 window.addEventListener('click', () => {
-    if (Howler.ctx.state === 'suspended') {
-        Howler.ctx.resume();
-    }
+    if (Howler.ctx.state === 'suspended') Howler.ctx.resume();
     initAudio();
 }, { once: true });
 
 window.addEventListener('keydown', () => {
-    if (Howler.ctx.state === 'suspended') {
-        Howler.ctx.resume();
-    }
+    if (Howler.ctx.state === 'suspended') Howler.ctx.resume();
     initAudio();
 }, { once: true });
 
