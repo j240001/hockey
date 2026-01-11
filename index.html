@@ -5081,9 +5081,16 @@ function updateGoalie(p) {
     // Lateral Tracking
     let targetY = RY;
     if (puckInDefHalf) {
-        // Lead the puck slightly based on its current vertical velocity
-        // This helps them "square up" to long-range angled shots.
-        targetY = puck.y + (puck.vy * 5); 
+        // 1. Calculate distance to the net
+        const distToNet = Math.abs(p.x - puck.x);
+        
+        // 2. Dynamic Look-Ahead: 
+        // Close (100px) = ~5 frames lead. Far (400px) = ~20 frames lead.
+        // We cap it at 25 frames so they don't over-commit on ultra-long dumps.
+        const lookAheadFrames = Math.min(25, Math.max(5, distToNet / 20));
+
+        // 3. Apply the lead
+        targetY = puck.y + (puck.vy * lookAheadFrames); 
     }
     const goalieLane = (typeof NET_H !== 'undefined' ? NET_H / 2 : 22);
     targetY = clamp(targetY, RY - goalieLane, RY + goalieLane);
