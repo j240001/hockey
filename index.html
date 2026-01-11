@@ -4959,25 +4959,22 @@ function updateGoalie(p) {
         }
     }
 
-    // --- POSSESSION LOGIC (Unchanged) ---
+    // --- POSSESSION LOGIC ---
     if (owned) {
         const stickDist = p.size / 2 + owned.r + 3;
         owned.x = p.x + Math.cos(p.angle) * stickDist;
         owned.y = p.y + Math.sin(p.angle) * stickDist;
         owned.vx = 0; owned.vy = 0;
 
-        // Auto-Dump Logic
         if (performance.now() - goalieFreezeTimer > 600) {
-            // Check for safe pass options or clear it
             const target = findGoaliePassTarget(p);
             if (target) {
                 p.angle = Math.atan2(target.y - p.y, target.x - p.x);
                 passPuckToTeammate(p, target);
             } else {
-                // Clear to center
                 const weAttackRight = (p.team === 0) ? team0AttacksRight : !team0AttacksRight;
                 p.angle = weAttackRight ? 0 : Math.PI;
-                shootPuck(p, 10.0); // Stronger clear
+                shootPuck(p, 10.0); 
             }
             puckStealCooldown = 30; goalieFreezeTimer = 0; goalieLocked = false;
             return;
@@ -4986,7 +4983,7 @@ function updateGoalie(p) {
     }
 
     // ============================================================
-    // 3. POSITIONING LOGIC (The New Aggressive Style)
+    // 3. POSITIONING LOGIC
     // ============================================================
     const defendX = (p.team === 0) ? goal1 : goal2; 
     const defendY = RY; 
@@ -4994,12 +4991,11 @@ function updateGoalie(p) {
     const forwardDir = defendingLeft ? 1 : -1;
     const puckInDefHalf = defendingLeft ? (puck.x < RX) : (puck.x > RX);
 
-    // --- A. GEOMETRIC TRACKING (No Prediction, Just Angles) ---
+    // --- A. GEOMETRIC LATERAL TRACKING ---
     let targetY = RY;
     
     if (puckInDefHalf) {
-        // We use the CURRENT puck position. 
-        // Geometry handles the lead because the goalie is closer to the pivot point (net).
+        // Use Absolute Distance (The "Run Away" Fix)
         const distPuckToNet = Math.abs(puck.x - defendX);
         const distGoalieToNet = Math.abs(p.x - defendX);
 
@@ -5014,40 +5010,46 @@ function updateGoalie(p) {
     }
 
     // --- B. POST SAFETY CLAMP ---
-    // Stop 4px inside the post so we don't deflect rebounds in
+    // Stop 4px inside the post to prevent bank shots
     const goalieLane = (typeof NET_H !== 'undefined' ? NET_H / 2 : 22) - 4; 
     targetY = clamp(targetY, RY - goalieLane, RY + goalieLane);
 
-    // --- C. MOVEMENT (Athletic & Fast) ---
-    // Instead of complex "panic" states, we just give them a high base speed
-    // that scales slightly with urgency.
+    // --- C. Y-AXIS MOVEMENT ---
     const urgency = Math.abs(targetY - p.y);
-    let moveSpeed = 1.5; // Much faster base speed (was 0.8)
+    let moveSpeed = 1.5; // High base speed
 
-    if (urgency > 20) moveSpeed = 2.5; // Sprint if deked out
+    // Sprint if deked out
+    if (urgency > 20) moveSpeed = 2.5; 
     
     p.y += clamp(targetY - p.y, -moveSpeed, moveSpeed);
 
 
-    // 2. Depth Calculation (The "Telescoping" Fix)
+    // --- D. ANGLE & DEPTH ---
+    
+    // 1. Calculate Angles
+    // *** DEFINED HERE so it exists for the depth logic ***
+    const baseAngle = Math.atan2(p.y - defendY, p.x - defendX); 
+    const puckAngle = Math.atan2(puck.y - p.y, puck.x - p.x);
+    
+    // Smoothly turn head to face puck
+    let diff = normalizeAngle(puckAngle - p.angle);
+    diff = clamp(diff, -0.2, 0.2); 
+    p.angle += diff;
+
+    // 2. Depth Calculation (Telescoping Logic)
     const angleFromCenter = Math.abs(Math.sin(baseAngle)); 
     
-    // Step A: Determine Max Aggression based on Angle
-    // Center shot = Max 40px out. Sharp angle = Max 12px out.
+    // Step A: Max Aggression (40px center, 12px post)
     const maxDepth = 40 - (angleFromCenter * (40 - 12));
 
-    // Step B: Scale based on Puck Distance
-    // If puck is far (>300px), stand at maxDepth.
-    // If puck is close (<100px), retreat deep to 8px.
+    // Step B: Scale by Distance (Retreat if puck gets close)
     const distToPuck = Math.hypot(puck.x - p.x, puck.y - p.y);
-    let retreatFactor = (distToPuck - 100) / 200; // Normalizes distance to 0.0 - 1.0 range
+    let retreatFactor = (distToPuck - 100) / 200; 
     
-    // Clamp the factor (0 = Close/Deep, 1 = Far/Aggressive)
     if (retreatFactor < 0) retreatFactor = 0;
     if (retreatFactor > 1) retreatFactor = 1;
 
-    // Calculate final offset
-    // We blend between "Deep Safety" (8px) and "Aggressive Challenge" (maxDepth)
+    // Blend: 8px (Deep) <-> maxDepth (Aggressive)
     const desiredOffset = 8 + (retreatFactor * (maxDepth - 8));
     
     const idealX = defendX + (forwardDir * desiredOffset);
