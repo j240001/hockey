@@ -5114,19 +5114,35 @@ function updateGoalie(p) {
     const goalieLane = (typeof NET_H !== 'undefined' ? NET_H / 2 : 22) - 3; 
     targetY = clamp(targetY, RY - goalieLane, RY + goalieLane);
 
-    // 4. THE "DESPERATION SLIDE" (Speed Boost)
-    // Calculate how far we are from the save
-    let lateralUrgency = Math.abs(targetY - p.y);
-    
-    let currentMaxS = p.maxSpeed; // Start with base speed (0.8)
 
-    // If we are more than 10 pixels off, start boosting speed
+
+    // 4. THE "DESPERATION SLIDE" (Velocity Aware)
+    let lateralUrgency = Math.abs(targetY - p.y);
+    let currentMaxS = p.maxSpeed; // Base (0.8)
+    
+    // Check how fast the puck is moving laterally
+    const puckLateralSpeed = Math.abs(puck.vy);
+
+    // TRIGGER 1: Distance (We are far off)
     if (lateralUrgency > 10) {
-        // The further away, the faster they push. 
-        // Maxes out around speed 3.0 (Fast slide)
         currentMaxS = 0.8 + (lateralUrgency * 0.08); 
-        if (currentMaxS > 3.0) currentMaxS = 3.0; 
     }
+
+    // TRIGGER 2: Panic (Puck is moving fast, so we must match it)
+    // If puck is flying across the crease (> 3.0), we unlock our speed limit.
+    if (puckLateralSpeed > 3.0) {
+        // We allow the goalie to move almost as fast as the puck to keep up
+        currentMaxS = Math.max(currentMaxS, puckLateralSpeed * 0.6); 
+    }
+
+    // Hard Cap to prevent teleportation glitches
+    if (currentMaxS > 3.5) currentMaxS = 3.5; 
+
+    // Apply
+    p.y += clamp(targetY - p.y, -currentMaxS, currentMaxS);
+
+
+
 
     // Apply the movement with the new dynamic speed limit
     p.y += clamp(targetY - p.y, -currentMaxS, currentMaxS);
