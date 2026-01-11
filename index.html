@@ -1826,7 +1826,8 @@ function collideCircleWithRink(obj, radius, restitution = 0.8) {
                 if (impactSpeed > 2.0) { // Don't play on tiny nudges
                     // Randomize volume slightly for realism
                     let id = sound.play('puck_board');
-                    sound.volume(0.5 + Math.random() * 0.5, id);
+                    let vol = Math.min(1.0, impactSpeed * 0.1); 
+                    sound.volume(vol, id);
                 }
             }
             // +++ END AUDIO +++
@@ -2904,7 +2905,8 @@ function shootPuck(player, power, targetOverride) {
     player.shootCooldown = 35;
     puck.lastOwnerId = player.id;
     ejectPuckFromOwner(player);
-    sound.play('shoot_puck'); // +++ AUDIO +++
+    var id = sound.play('shoot_puck');
+    sound.volume(0.7, id);
 
     // Aim strictly from Blade to Target
     const finalAngle = Math.atan2(targetY - launchY, targetX - launchX);
@@ -2912,7 +2914,7 @@ function shootPuck(player, power, targetOverride) {
     // =========================================================
     // 7. THE SPREAD DIAL (SET TO 0 FOR DEAD ACCURACY)
     // =========================================================
-    const SPREAD_AMOUNT = 0.200; // 0 perfect / .200 realistic / .400 terrible
+    const SPREAD_AMOUNT = 0.250; // 0 perfect / .200 realistic / .400 terrible
     const randomError = (Math.random() - 0.5) * SPREAD_AMOUNT;
     const shotAngle = finalAngle + randomError;
 
@@ -2966,7 +2968,8 @@ function passPuckToTeammate(p, target) {
 
     puck.lastOwnerId = p.id;
     ejectPuckFromOwner(p); 
-    sound.play('shoot_puck'); // +++ AUDIO +++
+    var id = sound.play('shoot_puck');
+    sound.volume(0.3, id);
 
     const dirX = dx / aimDist;
     const dirY = dy / aimDist;
@@ -5993,7 +5996,8 @@ function resetAfterGoal(scoringTeam) {
         lastGoalTeam = scoringTeam;
 
         // +++ AUDIO TRIGGER +++
-        sound.play('goal_horn'); 
+        var id = sound.play('goal_horn');
+        sound.volume(0.3, id);
         // +++ END AUDIO +++
 
         lastGoalScorerId = puck.lastOwnerId || null;
