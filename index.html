@@ -8625,6 +8625,14 @@ window.addEventListener('click', () => {
     initAudio();
 }, { once: true });
 
+// +++ FIX FOR MOBILE AUDIO +++
+window.addEventListener('touchstart', () => {
+    if (Howler.ctx.state === 'suspended') {
+        Howler.ctx.resume();
+    }
+    initAudio();
+}, { once: true });
+
 window.addEventListener('keydown', () => {
     if (Howler.ctx.state === 'suspended') Howler.ctx.resume();
     initAudio();
