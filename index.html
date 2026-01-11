@@ -2885,7 +2885,7 @@ function shootPuck(player, power, targetOverride) {
 
     // 4. CALCULATE POWER (Honest Physics)
     // What you set is what you get. No distance boosts.
-    let shotPower = (power !== undefined) ? power : (5 + Math.random() * 6);
+    let shotPower = (power !== undefined) ? power : (6 + Math.random() * 7);
 
     // 5. BEHIND NET SAFETY (Unchanged)
     const behind = fixBehindNetShotDir(player);
@@ -2911,7 +2911,7 @@ function shootPuck(player, power, targetOverride) {
     // =========================================================
     // 7. THE SPREAD DIAL (SET TO 0 FOR DEAD ACCURACY)
     // =========================================================
-    const SPREAD_AMOUNT = 0.125; // 0 perfect / .200 realistic / .400 terrible
+    const SPREAD_AMOUNT = 0.08; // 0 perfect / .200 realistic / .400 terrible
     const randomError = (Math.random() - 0.5) * SPREAD_AMOUNT;
     const shotAngle = finalAngle + randomError;
 
