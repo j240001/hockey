@@ -2178,6 +2178,9 @@ function whistle(reason, durationMs = 2000) {
     // Prevent triggering a new pause if the game is already stopped by a goal or whistle.
     if (isResetActive()) return; 
 
+    // +++ AUDIO TRIGGER +++
+    playGameSound('referee_whistle', 0.5);
+
     // Reset current state variables that conflict with the whistle.
     const owner = getPlayerById(puck.ownerId);
     if (owner) {
@@ -8500,7 +8503,8 @@ var sound = new Howl({
         crowd_bed:  [0, 152737, true], 
         goal_horn:  [152737, 3105],
         puck_board: [155842, 416],
-        shoot_puck: [156258, 415]
+        shoot_puck: [156258, 415],
+        referee_whistle: [156673, 280]
     }
 });
 
