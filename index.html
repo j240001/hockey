@@ -1824,10 +1824,9 @@ function collideCircleWithRink(obj, radius, restitution = 0.8) {
             if (obj === puck) {
                 const impactSpeed = Math.hypot(obj.vx, obj.vy);
                 if (impactSpeed > 2.0) { // Don't play on tiny nudges
-                    // Randomize volume slightly for realism
-                    let id = sound.play('puck_board');
                     let vol = Math.min(1.0, impactSpeed * 0.1); 
-                    sound.volume(vol, id);
+                    // Use the wrapper to handle mute logic automatically
+                    playGameSound('puck_board', vol);
                 }
             }
             // +++ END AUDIO +++
@@ -2905,8 +2904,7 @@ function shootPuck(player, power, targetOverride) {
     player.shootCooldown = 35;
     puck.lastOwnerId = player.id;
     ejectPuckFromOwner(player);
-    var id = sound.play('shoot_puck');
-    sound.volume(0.15, id);
+    playGameSound('shoot_puck', 0.15);
 
     // Aim strictly from Blade to Target
     const finalAngle = Math.atan2(targetY - launchY, targetX - launchX);
@@ -2968,8 +2966,7 @@ function passPuckToTeammate(p, target) {
 
     puck.lastOwnerId = p.id;
     ejectPuckFromOwner(p); 
-    var id = sound.play('shoot_puck');
-    sound.volume(0.1, id);
+    playGameSound('shoot_puck', 0.1);
 
     const dirX = dx / aimDist;
     const dirY = dy / aimDist;
@@ -5995,10 +5992,7 @@ function resetAfterGoal(scoringTeam) {
     if (scoringTeam !== -1) {
         lastGoalTeam = scoringTeam;
 
-        // +++ AUDIO TRIGGER +++
-        var id = sound.play('goal_horn');
-        sound.volume(0.3, id);
-        // +++ END AUDIO +++
+        playGameSound('goal_horn', 0.3);
 
         lastGoalScorerId = puck.lastOwnerId || null;
         
@@ -8537,18 +8531,30 @@ function initAudio() {
 }
 
 
+
 // HELPER: Only play sounds if we are in a "Real Time" mode
 function playGameSound(name, volumeOverride) {
-    // 1. BLOCK AUDIO IN FAST MODES
-    // If we are training, in a tournament sim, or warping, stay silent.
+    // 1. TRAINING MODE CHECK
+    // If training, only play if we are explicitly watching
     if (TRAINING_MODE && !WATCH_MODE) return; 
-    if (gameState === 'tournament') return;
-    if (gameState === 'training') return;
 
-    // 2. Play the sound
+    // 2. TOURNAMENT MODE CHECK
+    if (gameState === 'tournament') {
+        // If the Tournament object exists but we aren't watching, MUTE.
+        // (Assuming 'watchMode' is the flag toggled by 'W')
+        if (typeof Tournament !== 'undefined' && !Tournament.watchMode) return;
+    }
+
+    // 3. PLAYOFFS MODE CHECK
+    if (gameState === 'playoffs') {
+        // If the Playoffs object exists but we aren't watching, MUTE.
+        if (typeof Playoffs !== 'undefined' && !Playoffs.watchMode) return;
+    }
+
+    // 4. Play the sound (Passed all checks)
     var id = sound.play(name);
     
-    // 3. Apply Volume if provided
+    // 5. Apply Volume if provided
     if (volumeOverride !== undefined) {
         sound.volume(volumeOverride, id);
     }
