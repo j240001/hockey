@@ -2906,7 +2906,7 @@ function shootPuck(player, power, targetOverride) {
     puck.lastOwnerId = player.id;
     ejectPuckFromOwner(player);
     var id = sound.play('shoot_puck');
-    sound.volume(0.1, id);
+    sound.volume(0.15, id);
 
     // Aim strictly from Blade to Target
     const finalAngle = Math.atan2(targetY - launchY, targetX - launchX);
@@ -8535,6 +8535,25 @@ function initAudio() {
     sound.fade(0, 0.15, 2000, id3);
     crowdLayers.push(id3);
 }
+
+
+// HELPER: Only play sounds if we are in a "Real Time" mode
+function playGameSound(name, volumeOverride) {
+    // 1. BLOCK AUDIO IN FAST MODES
+    // If we are training, in a tournament sim, or warping, stay silent.
+    if (TRAINING_MODE && !WATCH_MODE) return; 
+    if (gameState === 'tournament') return;
+    if (gameState === 'training') return;
+
+    // 2. Play the sound
+    var id = sound.play(name);
+    
+    // 3. Apply Volume if provided
+    if (volumeOverride !== undefined) {
+        sound.volume(volumeOverride, id);
+    }
+}
+
 
 // Helper to handle Replay Ducking for ALL layers
 function setCrowdReplayMode(isReplay) {
