@@ -5105,8 +5105,8 @@ function updateGoalie(p) {
     }
     
     // 2. CLAMP (Stay in the crease)
-    // We give them a little extra room (+5) to cover the post tight
-    const goalieLane = (typeof NET_H !== 'undefined' ? NET_H / 2 : 22) + 5; 
+    
+    const goalieLane = (typeof NET_H !== 'undefined' ? NET_H / 2 : 22) - 2; 
     targetY = clamp(targetY, RY - goalieLane, RY + goalieLane);
 
     // 3. THE "DESPERATION SLIDE" (Speed Boost)
