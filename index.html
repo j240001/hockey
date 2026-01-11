@@ -2906,7 +2906,7 @@ function shootPuck(player, power, targetOverride) {
     puck.lastOwnerId = player.id;
     ejectPuckFromOwner(player);
     var id = sound.play('shoot_puck');
-    sound.volume(0.3, id);
+    sound.volume(0.1, id);
 
     // Aim strictly from Blade to Target
     const finalAngle = Math.atan2(targetY - launchY, targetX - launchX);
@@ -2969,7 +2969,7 @@ function passPuckToTeammate(p, target) {
     puck.lastOwnerId = p.id;
     ejectPuckFromOwner(p); 
     var id = sound.play('shoot_puck');
-    sound.volume(0.2, id);
+    sound.volume(0.1, id);
 
     const dirX = dx / aimDist;
     const dirY = dy / aimDist;
