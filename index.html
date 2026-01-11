@@ -4943,226 +4943,116 @@ function updateAISkater(p) {
 
 
 function updateGoalie(p) {
-
     // 1. Decrement Save Cooldown
     if (p.saveCooldown > 0) p.saveCooldown--;
 
     const owned = (puck.ownerId === p.id) ? puck : null;
 
-    // ============================================================
-    // 1. DEAD PUCK COVER (Butt Check)
-    // ============================================================
+    // --- DEAD PUCK COVER ---
     if (!owned && puck.ownerId === null) {
         const dist = Math.hypot(puck.x - p.x, puck.y - p.y);
         const puckSpeed = Math.hypot(puck.vx, puck.vy);
         if (dist < 32 && puckSpeed < 0.05) {
-            puck.ownerId = p.id;
-            puck.vx = 0;
-            puck.vy = 0;
+            puck.ownerId = p.id; puck.vx = 0; puck.vy = 0;
             goalieFreezeTimer = performance.now(); 
             return; 
         }
     }
 
-    // ============================================================
-    // 2. POSSESSION LOGIC
-    // ============================================================
+    // --- POSSESSION LOGIC (Unchanged) ---
     if (owned) {
-        const AUTO_DUMP_MS = 600; 
-        const FREEZE_WHISTLE_MS = 2000; 
-
         const stickDist = p.size / 2 + owned.r + 3;
         owned.x = p.x + Math.cos(p.angle) * stickDist;
         owned.y = p.y + Math.sin(p.angle) * stickDist;
         owned.vx = 0; owned.vy = 0;
 
-        if (performance.now() - goalieFreezeTimer > FREEZE_WHISTLE_MS) {
-            whistle("Goalie Freezes Puck");
-            return;
-        }
-
-        // AUTO-DUMP / CLEAR DECISION
-        if (performance.now() - goalieFreezeTimer > AUTO_DUMP_MS) {
-            
-            // A. SAFETY: WAIT IF CROWDED
-            let closestOppDist = 9999;
-            for (const o of players) {
-                if (o.team !== p.team) {
-                    const d = Math.hypot(o.x - p.x, o.y - p.y);
-                    if (d < closestOppDist) closestOppDist = d;
-                }
-            }
-            // If opponent is literally hugging the goalie, wait for whistle
-            if (closestOppDist < 35) return; 
-
-            // B. TRY SMART PASS
+        // Auto-Dump Logic
+        if (performance.now() - goalieFreezeTimer > 600) {
+            // Check for safe pass options or clear it
             const target = findGoaliePassTarget(p);
-
             if (target) {
-                // Face the target (Visuals)
                 p.angle = Math.atan2(target.y - p.y, target.x - p.x);
                 passPuckToTeammate(p, target);
-            }
-            else {
-                // C. SMART CLEAR (SCAN ANGLES)
-                // Don't just shoot blindly. Find the open lane.
-                
+            } else {
+                // Clear to center
                 const weAttackRight = (p.team === 0) ? team0AttacksRight : !team0AttacksRight;
-                const forwardDir = weAttackRight ? 1 : -1;
-                const baseAngle = (forwardDir === 1) ? 0 : Math.PI;
-
-                // Check 3 Angles: High Glass, Low Glass, Center
-                const candidates = [ baseAngle - 0.7, baseAngle + 0.7, baseAngle ];
-                
-                let bestAngle = candidates[0];
-                let maxSafetyScore = -9999;
-
-                for (let ang of candidates) {
-                    // Cast a "ray" 150px out
-                    const tx = p.x + Math.cos(ang) * 150;
-                    const ty = p.y + Math.sin(ang) * 150;
-                    
-                    // Score this angle based on enemy proximity
-                    let laneScore = 100; 
-                    
-                    for (const o of players) {
-                        if (o.team !== p.team) {
-                            // Distance to the flight path
-                            const dToLine = pointLineDistance(p.x, p.y, tx, ty, o.x, o.y);
-                            const dToGoalie = Math.hypot(o.x - p.x, o.y - p.y);
-                            
-                            // Penalize if enemy is close to this lane AND close to goalie
-                            if (dToGoalie < 150 && dToLine < 40) {
-                                // Closer enemies = Higher Penalty
-                                laneScore -= (200 - dToGoalie); 
-                            }
-                        }
-                    }
-                    
-                    if (laneScore > maxSafetyScore) {
-                        maxSafetyScore = laneScore;
-                        bestAngle = ang;
-                    }
-                }
-
-                p.angle = bestAngle;
-                shootPuck(p, 6.0); // Hard clear
+                p.angle = weAttackRight ? 0 : Math.PI;
+                shootPuck(p, 10.0); // Stronger clear
             }
-            
-            puckStealCooldown = 30; 
-            goalieFreezeTimer = 0; 
-            goalieLocked = false; 
-            return;
-        }
-
-        // Visual Lock Logic (Harassment)
-        if (goalieLocked) {
-            goalieDumpAttempts++;
-            if (goalieDumpAttempts > 100) {
-                whistle("Goalie Freezes Puck");
-                goalieDumpAttempts = 0;
-            }
+            puckStealCooldown = 30; goalieFreezeTimer = 0; goalieLocked = false;
             return;
         }
         return;
     }
 
     // ============================================================
-    // 3. POSITIONING LOGIC (No Puck)
+    // 3. POSITIONING LOGIC (The New Aggressive Style)
     // ============================================================
-    const dx = puck.x - p.x;
-    const dy = puck.y - p.y;
     const defendX = (p.team === 0) ? goal1 : goal2; 
     const defendY = RY; 
     const defendingLeft = (defendX < RX);
     const forwardDir = defendingLeft ? 1 : -1;
     const puckInDefHalf = defendingLeft ? (puck.x < RX) : (puck.x > RX);
 
-    // --- GEOMETRIC LATERAL TRACKING (The Fix) ---
+    // --- A. GEOMETRIC TRACKING (No Prediction, Just Angles) ---
     let targetY = RY;
     
     if (puckInDefHalf) {
-        // 1. PREDICT FUTURE PUCK POSITION
-        // Look ahead to see where the play is going, not just where it is.
-        const lookAheadFrames = 15; 
-        const futurePuckY = puck.y + (puck.vy * lookAheadFrames);
-        const futurePuckX = puck.x + (puck.vx * lookAheadFrames);
-
-        // 2. CALCULATE GEOMETRIC RATIO (The Magic)
-        // We draw a line from the Future Puck to the Net Center.
-        // We find where that line intersects the Goalie's current depth (p.x).
-        
-        const distPuckToNet = futurePuckX - defendX;
+        // We use the CURRENT puck position. 
+        // Geometry handles the lead because the goalie is closer to the pivot point (net).
+        const distPuckToNet = puck.x - defendX;
         const distGoalieToNet = p.x - defendX;
 
-        // Ratio determines movement scale.
-        // e.g. If Puck is 100ft away and Goalie is 10ft away, Ratio is 0.1
-        // So if Puck moves 10ft sideways, Goalie only needs to move 1ft.
         let ratio = distGoalieToNet / distPuckToNet;
         
-        // Safety Clamps to prevent "division by zero" errors or backward tracking
+        // Safety Clamps
         if (ratio < 0) ratio = 0;
         if (ratio > 1.0) ratio = 1.0;
 
-        // PROJECT THE ANGLE
-        // This puts the goalie perfectly between the puck and the center of the net.
-        targetY = RY + (futurePuckY - RY) * ratio;
+        // Project the perfect angle
+        targetY = RY + (puck.y - RY) * ratio;
     }
-    
-    // 3. CLAMP (Stay in the crease)
-    // Use -3 to stop slightly INSIDE the post (Prevents the "Bank Shot" error)
-    const goalieLane = (typeof NET_H !== 'undefined' ? NET_H / 2 : 22) - 3; 
+
+    // --- B. POST SAFETY CLAMP ---
+    // Stop 4px inside the post so we don't deflect rebounds in
+    const goalieLane = (typeof NET_H !== 'undefined' ? NET_H / 2 : 22) - 4; 
     targetY = clamp(targetY, RY - goalieLane, RY + goalieLane);
 
+    // --- C. MOVEMENT (Athletic & Fast) ---
+    // Instead of complex "panic" states, we just give them a high base speed
+    // that scales slightly with urgency.
+    const urgency = Math.abs(targetY - p.y);
+    let moveSpeed = 1.5; // Much faster base speed (was 0.8)
 
-
-    // 4. THE "DESPERATION SLIDE" (Velocity Aware)
-    let lateralUrgency = Math.abs(targetY - p.y);
-    let currentMaxS = p.maxSpeed; // Base (0.8)
+    if (urgency > 20) moveSpeed = 2.5; // Sprint if deked out
     
-    // Check how fast the puck is moving laterally
-    const puckLateralSpeed = Math.abs(puck.vy);
-
-    // TRIGGER 1: Distance (We are far off)
-    if (lateralUrgency > 10) {
-        currentMaxS = 0.8 + (lateralUrgency * 0.08); 
-    }
-
-    // TRIGGER 2: Panic (Puck is moving fast, so we must match it)
-    // If puck is flying across the crease (> 3.0), we unlock our speed limit.
-    if (puckLateralSpeed > 3.0) {
-        // We allow the goalie to move almost as fast as the puck to keep up
-        currentMaxS = Math.max(currentMaxS, puckLateralSpeed * 0.6); 
-    }
-
-    // Hard Cap to prevent teleportation glitches
-    if (currentMaxS > 3.5) currentMaxS = 3.5; 
-
-    // Apply
-    p.y += clamp(targetY - p.y, -currentMaxS, currentMaxS);
+    p.y += clamp(targetY - p.y, -moveSpeed, moveSpeed);
 
 
+    // --- D. ANGLE & DEPTH (The "Challenge") ---
+    // 1. Face the Puck
+    const baseAngle = Math.atan2(p.y - defendY, p.x - defendX); 
+    const puckAngle = Math.atan2(puck.y - p.y, puck.x - p.x);
+    
+    // Smoothly turn to face puck
+    let diff = normalizeAngle(puckAngle - p.angle);
+    diff = clamp(diff, -0.2, 0.2); // Fast head tracking
+    p.angle += diff;
 
+    // 2. Depth Calculation (Step Out!)
+    // OLD: 6px to 20px (Too deep)
+    // NEW: 15px to 35px (Challenging)
+    const angleFromCenter = Math.abs(Math.sin(baseAngle)); 
+    
+    // If puck is centered, come out 35px. If at sharp angle, hug post at 15px.
+    const desiredOffset = 35 - (angleFromCenter * (35 - 15));
+    
+    const idealX = defendX + (forwardDir * desiredOffset);
+    p.x += clamp(idealX - p.x, -moveSpeed, moveSpeed);
 
-    // Apply the movement with the new dynamic speed limit
-    p.y += clamp(targetY - p.y, -currentMaxS, currentMaxS);
-
-    // Angle
-    const base = Math.atan2(p.y - defendY, p.x - defendX); 
-    const desired = Math.atan2(dy, dx); 
-    let diff = normalizeAngle(desired - base);
-    diff = clamp(diff, -1.2, 1.2); 
-    p.angle = base + diff;
-
-    // Depth
-    const angleFromCenter = Math.abs(Math.sin(p.angle)); 
-    const currentOffset = 20 - (angleFromCenter * (20 - 6));
-    const idealX = defendX + (forwardDir * currentOffset);
-    p.x += clamp(idealX - p.x, -p.maxSpeed, p.maxSpeed);
-
+    // Physics
     collideWithRink(p, p.size / 2);
 }
-
 
 
 
