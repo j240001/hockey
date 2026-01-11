@@ -63,6 +63,7 @@
 <script src="node_registry.js"></script>
 <script src="strategy_interpreter.js"></script>
 <script src="ai_coach.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
 
 <script>
 
@@ -1818,6 +1819,18 @@ function collideCircleWithRink(obj, radius, restitution = 0.8) {
             }
             // =========================================================
 
+            // +++ AUDIO TRIGGER +++ 
+            // Only play if it's the puck AND it hit hard enough
+            if (obj === puck) {
+                const impactSpeed = Math.hypot(obj.vx, obj.vy);
+                if (impactSpeed > 2.0) { // Don't play on tiny nudges
+                    // Randomize volume slightly for realism
+                    let id = sound.play('puck_board');
+                    sound.volume(0.5 + Math.random() * 0.5, id);
+                }
+            }
+            // +++ END AUDIO +++
+
             collided = true;
             break; // one wall is enough
         }
@@ -2891,6 +2904,7 @@ function shootPuck(player, power, targetOverride) {
     player.shootCooldown = 35;
     puck.lastOwnerId = player.id;
     ejectPuckFromOwner(player);
+    sound.play('shoot_puck'); // +++ AUDIO +++
 
     // Aim strictly from Blade to Target
     const finalAngle = Math.atan2(targetY - launchY, targetX - launchX);
@@ -2952,6 +2966,7 @@ function passPuckToTeammate(p, target) {
 
     puck.lastOwnerId = p.id;
     ejectPuckFromOwner(p); 
+    sound.play('shoot_puck'); // +++ AUDIO +++
 
     const dirX = dx / aimDist;
     const dirY = dy / aimDist;
@@ -5494,6 +5509,7 @@ function captureReplayFrame() {
 // 2. START THE SHOW
 function startInstantReplay(callback) {
     isReplaying = true;
+    setCrowdReplayMode(true);
     replayIndex = 70; 
     replayFinishedCallback = callback; 
 }
@@ -5592,6 +5608,7 @@ function renderReplay(ctx) {
         } else {
             // STOP IT (Normal Goal Behavior)
             isReplaying = false;
+            setCrowdReplayMode(false); // +++ AUDIO: Bring volume back up +++
             if (replayFinishedCallback) replayFinishedCallback();
         }
     }
@@ -5974,6 +5991,11 @@ function resetAfterGoal(scoringTeam) {
     // 1. Mark scorer and training goals
     if (scoringTeam !== -1) {
         lastGoalTeam = scoringTeam;
+
+        // +++ AUDIO TRIGGER +++
+        sound.play('goal_horn'); 
+        // +++ END AUDIO +++
+
         lastGoalScorerId = puck.lastOwnerId || null;
         
         // **FIX**: The TRAIN_TOTAL_GOALS++ was executed twice before; removed redundancy.
@@ -8464,7 +8486,61 @@ document.addEventListener("keydown", e => {
     }
 });
 
+// =========================================================
+// AUDIO ENGINE (Howler.js Integration)
+// =========================================================
+var sound = new Howl({
+    src: ['sprite.mp3'], // Make sure this file is in the same folder!
+    volume: 1.0,
+    sprite: {
+        // [Start, Duration, Loop?]
+        crowd_bed:  [0, 152737, true], 
+        goal_horn:  [152737, 3105],
+        puck_board: [155842, 416],
+        shoot_puck: [156258, 415]
+    }
+});
 
+// Global ID to track the crowd loop so we can fade it
+let crowdLoopId = null;
+
+function initAudio() {
+    // Start the crowd loop immediately (it will auto-loop)
+    // We start it at 0 volume and fade it in
+    if (!crowdLoopId) {
+        crowdLoopId = sound.play('crowd_bed');
+        sound.volume(0, crowdLoopId);
+        sound.fade(0, 0.4, 2000, crowdLoopId); // Fade to 40% volume over 2s
+    }
+}
+
+// Helper to handle Replay Ducking (The "Buzzing" Fix)
+function setCrowdReplayMode(isReplay) {
+    if (!crowdLoopId) return;
+    
+    if (isReplay) {
+        // Duck volume down to 10% instantly
+        sound.fade(0.4, 0.1, 300, crowdLoopId); 
+    } else {
+        // Fade back up to 40%
+        sound.fade(0.1, 0.4, 1000, crowdLoopId);
+    }
+}
+
+// Initialize audio on first user interaction (browser requirement)
+window.addEventListener('click', () => {
+    if (Howler.ctx.state === 'suspended') {
+        Howler.ctx.resume();
+    }
+    initAudio();
+}, { once: true });
+
+window.addEventListener('keydown', () => {
+    if (Howler.ctx.state === 'suspended') {
+        Howler.ctx.resume();
+    }
+    initAudio();
+}, { once: true });
 
 
 </script>
