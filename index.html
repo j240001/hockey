@@ -5078,49 +5078,54 @@ function updateGoalie(p) {
     const forwardDir = defendingLeft ? 1 : -1;
     const puckInDefHalf = defendingLeft ? (puck.x < RX) : (puck.x > RX);
 
-    // --- NEW PREDICTIVE LATERAL TRACKING ---
+    // --- GEOMETRIC LATERAL TRACKING (The Fix) ---
     let targetY = RY;
-    let lateralUrgency = 0; // Track how far we need to move
-
+    
     if (puckInDefHalf) {
-        // 1. INTERCEPT LOGIC (Where is the puck actually going?)
-        const distToX = Math.abs(defendX - puck.x);
+        // 1. PREDICT FUTURE PUCK POSITION
+        // Look ahead to see where the play is going, not just where it is.
+        const lookAheadFrames = 15; 
+        const futurePuckY = puck.y + (puck.vy * lookAheadFrames);
+        const futurePuckX = puck.x + (puck.vx * lookAheadFrames);
+
+        // 2. CALCULATE GEOMETRIC RATIO (The Magic)
+        // We draw a line from the Future Puck to the Net Center.
+        // We find where that line intersects the Goalie's current depth (p.x).
         
-        // Only predict if puck is moving towards the goal line
-        const approaching = (defendingLeft && puck.vx < -0.1) || (!defendingLeft && puck.vx > 0.1);
+        const distPuckToNet = futurePuckX - defendX;
+        const distGoalieToNet = p.x - defendX;
+
+        // Ratio determines movement scale.
+        // e.g. If Puck is 100ft away and Goalie is 10ft away, Ratio is 0.1
+        // So if Puck moves 10ft sideways, Goalie only needs to move 1ft.
+        let ratio = distGoalieToNet / distPuckToNet;
         
-        if (approaching) {
-             // Time = Distance / Speed
-             const timeToImpact = distToX / Math.abs(puck.vx);
-             
-             // Calculate the exact Y position where the puck will cross the line
-             const impactY = puck.y + (puck.vy * timeToImpact);
-             
-             // Set target to that future spot
-             targetY = impactY;
-        } else {
-             // If moving away/parallel, just track the puck normally
-             targetY = puck.y;
-        }
+        // Safety Clamps to prevent "division by zero" errors or backward tracking
+        if (ratio < 0) ratio = 0;
+        if (ratio > 1.0) ratio = 1.0;
+
+        // PROJECT THE ANGLE
+        // This puts the goalie perfectly between the puck and the center of the net.
+        targetY = RY + (futurePuckY - RY) * ratio;
     }
     
-    // 2. CLAMP (Stay in the crease)
-    
-    const goalieLane = (typeof NET_H !== 'undefined' ? NET_H / 2 : 22) - 2; 
+    // 3. CLAMP (Stay in the crease)
+    // Use -3 to stop slightly INSIDE the post (Prevents the "Bank Shot" error)
+    const goalieLane = (typeof NET_H !== 'undefined' ? NET_H / 2 : 22) - 3; 
     targetY = clamp(targetY, RY - goalieLane, RY + goalieLane);
 
-    // 3. THE "DESPERATION SLIDE" (Speed Boost)
+    // 4. THE "DESPERATION SLIDE" (Speed Boost)
     // Calculate how far we are from the save
-    lateralUrgency = Math.abs(targetY - p.y);
+    let lateralUrgency = Math.abs(targetY - p.y);
     
     let currentMaxS = p.maxSpeed; // Start with base speed (0.8)
 
     // If we are more than 10 pixels off, start boosting speed
     if (lateralUrgency > 10) {
         // The further away, the faster they push. 
-        // Maxes out around speed 2.4 (3x normal speed) for cross-crease one-timers.
-        currentMaxS = 0.8 + (lateralUrgency * 0.05); 
-        if (currentMaxS > 2.4) currentMaxS = 2.4; 
+        // Maxes out around speed 3.0 (Fast slide)
+        currentMaxS = 0.8 + (lateralUrgency * 0.08); 
+        if (currentMaxS > 3.0) currentMaxS = 3.0; 
     }
 
     // Apply the movement with the new dynamic speed limit
@@ -5141,7 +5146,6 @@ function updateGoalie(p) {
 
     collideWithRink(p, p.size / 2);
 }
-
 
 
 
