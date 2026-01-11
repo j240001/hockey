@@ -2885,7 +2885,7 @@ function shootPuck(player, power, targetOverride) {
 
     // 4. CALCULATE POWER (Honest Physics)
     // What you set is what you get. No distance boosts.
-    let shotPower = (power !== undefined) ? power : (7 + Math.random() * 5);
+    let shotPower = (power !== undefined) ? power : (6 + Math.random() * 4);
 
     // 5. BEHIND NET SAFETY (Unchanged)
     const behind = fixBehindNetShotDir(player);
