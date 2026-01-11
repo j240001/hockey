@@ -5029,23 +5029,26 @@ function updateGoalie(p) {
     p.y += clamp(targetY - p.y, -moveSpeed, moveSpeed);
 
 
-    // --- D. ANGLE & DEPTH (The "Challenge") ---
-    // 1. Face the Puck
-    const baseAngle = Math.atan2(p.y - defendY, p.x - defendX); 
-    const puckAngle = Math.atan2(puck.y - p.y, puck.x - p.x);
-    
-    // Smoothly turn to face puck
-    let diff = normalizeAngle(puckAngle - p.angle);
-    diff = clamp(diff, -0.2, 0.2); // Fast head tracking
-    p.angle += diff;
-
-    // 2. Depth Calculation (Step Out!)
-    // OLD: 6px to 20px (Too deep)
-    // NEW: 15px to 35px (Challenging)
+    // 2. Depth Calculation (The "Telescoping" Fix)
     const angleFromCenter = Math.abs(Math.sin(baseAngle)); 
     
-    // If puck is centered, come out 35px. If at sharp angle, hug post at 15px.
-    const desiredOffset = 35 - (angleFromCenter * (35 - 15));
+    // Step A: Determine Max Aggression based on Angle
+    // Center shot = Max 40px out. Sharp angle = Max 12px out.
+    const maxDepth = 40 - (angleFromCenter * (40 - 12));
+
+    // Step B: Scale based on Puck Distance
+    // If puck is far (>300px), stand at maxDepth.
+    // If puck is close (<100px), retreat deep to 8px.
+    const distToPuck = Math.hypot(puck.x - p.x, puck.y - p.y);
+    let retreatFactor = (distToPuck - 100) / 200; // Normalizes distance to 0.0 - 1.0 range
+    
+    // Clamp the factor (0 = Close/Deep, 1 = Far/Aggressive)
+    if (retreatFactor < 0) retreatFactor = 0;
+    if (retreatFactor > 1) retreatFactor = 1;
+
+    // Calculate final offset
+    // We blend between "Deep Safety" (8px) and "Aggressive Challenge" (maxDepth)
+    const desiredOffset = 8 + (retreatFactor * (maxDepth - 8));
     
     const idealX = defendX + (forwardDir * desiredOffset);
     p.x += clamp(idealX - p.x, -moveSpeed, moveSpeed);
