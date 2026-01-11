@@ -7951,6 +7951,12 @@ function loadAI() {
 
 
 function loop(now) {
+
+
+    // +++ AUDIO UPDATE +++
+    updateCrowdAmbience(); 
+    // +++ END AUDIO +++
+
     frameCount++;
     if (now - lastTime >= 1000) {
         fps = frameCount;
@@ -8509,7 +8515,6 @@ function initAudio() {
     let id1 = sound.play('crowd_bed');
     sound.seek(0, id1);
     sound.volume(0, id1);           // Start silent
-    sound.fade(0, 0.15, 2000, id1); // Fade to 15%
     crowdLayers.push(id1);
 
     // --- LAYER 2: The Widener (Starts at 7s) ---
@@ -8518,7 +8523,6 @@ function initAudio() {
     sound.seek(7.0, id2);           // Jump 7 seconds into the loop
     sound.rate(1.01, id2);          // 1% faster (prevents loops from syncing up)
     sound.volume(0, id2);
-    sound.fade(0, 0.15, 2000, id2);
     crowdLayers.push(id2);
 
     // --- LAYER 3: The Texture (Starts at 15s) ---
@@ -8526,8 +8530,49 @@ function initAudio() {
     sound.seek(15.0, id3);          // Jump 15 seconds into the loop
     sound.rate(0.99, id3);          // 1% slower (adds bass/depth)
     sound.volume(0, id3);
-    sound.fade(0, 0.15, 2000, id3);
     crowdLayers.push(id3);
+}
+
+
+
+
+// Track whether the crowd is currently audible
+let currentAmbienceState = 'off'; 
+
+function updateCrowdAmbience() {
+    // 1. Determine if we SHOULD hear the crowd right now
+    let shouldHear = false;
+
+    // A. Normal Gameplay
+    if (gameState === 'playing') shouldHear = true;
+    
+    // B. Playoffs (Only if watching)
+    if (gameState === 'playoffs' && typeof Playoffs !== 'undefined' && Playoffs.watchMode) {
+        shouldHear = true;
+    }
+    
+    // C. Tournament (Only if watching)
+    if (gameState === 'tournament' && typeof Tournament !== 'undefined' && Tournament.watchMode) {
+        shouldHear = true;
+    }
+    
+    // D. Training (Only if watching)
+    if (TRAINING_MODE && WATCH_MODE) shouldHear = true;
+
+    // --- EXECUTE FADES ---
+
+    // CASE 1: Turn ON (Fade In)
+    if (shouldHear && currentAmbienceState === 'off') {
+        currentAmbienceState = 'on';
+        // Fade all layers from 0 to 0.15 over 2 seconds
+        crowdLayers.forEach(id => sound.fade(0, 0.15, 2000, id));
+    } 
+    // CASE 2: Turn OFF (Fade Out)
+    else if (!shouldHear && currentAmbienceState === 'on') {
+        currentAmbienceState = 'off';
+        // Fade all layers from current vol to 0 over 1 second
+        crowdLayers.forEach(id => sound.fade(sound.volume(id), 0, 1000, id));
+    }
 }
 
 
