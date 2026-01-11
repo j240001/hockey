@@ -2911,7 +2911,7 @@ function shootPuck(player, power, targetOverride) {
     // =========================================================
     // 7. THE SPREAD DIAL (SET TO 0 FOR DEAD ACCURACY)
     // =========================================================
-    const SPREAD_AMOUNT = 0.250; // 0 perfect / .200 realistic / .400 terrible
+    const SPREAD_AMOUNT = 0.125; // 0 perfect / .200 realistic / .400 terrible
     const randomError = (Math.random() - 0.5) * SPREAD_AMOUNT;
     const shotAngle = finalAngle + randomError;
 
