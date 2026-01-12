@@ -1824,8 +1824,8 @@ function collideCircleWithRink(obj, radius, restitution = 0.8) {
             if (obj === puck) {
                 const impactIntensity = Math.abs(dot); // <--- THIS IS THE MAGIC VARIABLE
                 
-                if (impactIntensity > 3.0) { 
-                    let vol = Math.min(0.5, impactIntensity * 0.15); 
+                if (impactIntensity > 1.0) { 
+                    let vol = Math.min(0.3, impactIntensity * 0.12); 
                     playGameSound('puck_board', vol);
                 }
             }
@@ -8678,6 +8678,7 @@ window.addEventListener('keydown', () => {
 
 </body>
 </html>
+
 
 
 
