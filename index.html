@@ -1825,7 +1825,7 @@ function collideCircleWithRink(obj, radius, restitution = 0.8) {
                 const impactIntensity = Math.abs(dot); // <--- THIS IS THE MAGIC VARIABLE
                 
                 if (impactIntensity > 3.0) { 
-                    let vol = Math.min(0.5, impactIntensity * 0.05); 
+                    let vol = Math.min(0.5, impactIntensity * 0.15); 
                     playGameSound('puck_board', vol);
                 }
             }
@@ -2899,7 +2899,7 @@ function shootPuck(player, power, targetOverride) {
     player.shootCooldown = 35;
     puck.lastOwnerId = player.id;
     ejectPuckFromOwner(player);
-    playGameSound('shoot_puck', 0.08);
+    playGameSound('shoot_puck', 0.4);
 
     // Aim strictly from Blade to Target
     const finalAngle = Math.atan2(targetY - launchY, targetX - launchX);
@@ -2961,7 +2961,7 @@ function passPuckToTeammate(p, target) {
 
     puck.lastOwnerId = p.id;
     ejectPuckFromOwner(p); 
-    playGameSound('shoot_puck', 0.06);
+    playGameSound('shoot_puck', 0.3);
 
     const dirX = dx / aimDist;
     const dirY = dy / aimDist;
@@ -8678,6 +8678,7 @@ window.addEventListener('keydown', () => {
 
 </body>
 </html>
+
 
 
 
