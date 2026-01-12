@@ -2961,7 +2961,7 @@ function passPuckToTeammate(p, target) {
 
     puck.lastOwnerId = p.id;
     ejectPuckFromOwner(p); 
-    playGameSound('shoot_puck', 0.8);
+    playGameSound('shoot_puck', 0.4);
 
     const dirX = dx / aimDist;
     const dirY = dy / aimDist;
@@ -8678,6 +8678,7 @@ window.addEventListener('keydown', () => {
 
 </body>
 </html>
+
 
 
 
