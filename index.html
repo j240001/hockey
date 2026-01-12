@@ -846,14 +846,14 @@ function handleOptionsInput(e) {
 // =========================================================
 // GAME CLOCK AND SCORE GLOBALS
 // =========================================================
-const GAME_DURATION_SECONDS = 120; // seconds
+const GAME_DURATION_SECONDS = 180; // seconds
 let timeRemaining = GAME_DURATION_SECONDS;
 let lastGameTimeUpdate = performance.now();
 
 // MULTI-PERIOD SYSTEM
 let currentPeriod = 1;
 const TOTAL_PERIODS = 3;
-const PERIOD_LENGTH_SECONDS = 120; // same as GAME_DURATION_SECONDS
+const PERIOD_LENGTH_SECONDS = 180; // same as GAME_DURATION_SECONDS
 
 
 // ==========================================
@@ -4940,8 +4940,8 @@ function updateAISkater(p) {
 function checkPuckGoalieCollision(puck, g) {
     // --- 1. CONFIGURATION (Tune these numbers!) ---
     const padDepth  = 8;    // How "thick" the pads are (Front to Back)
-    const padWidth  = 10;   // Width of ONE pad
-    const gapWidth  = 5.0;  // The Five-Hole (Puck is diameter 3.0, so this fits easily)
+    const padWidth  = 14;   // Width of ONE pad
+    const gapWidth  = 4.0;  // The Five-Hole (Puck is diameter 3.0, so this fits easily)
     const fwdOffset = 6;    // How far "Forward" from the center point the pads sit
 
     // --- 2. TRANSFORM TO LOCAL SPACE ---
@@ -8678,6 +8678,7 @@ window.addEventListener('keydown', () => {
 
 </body>
 </html>
+
 
 
 
