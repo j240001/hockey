@@ -5043,8 +5043,8 @@ function checkPuckGoalieCollision(puck, g) {
         puck.x += wx * (hit.pen + 0.5);
         puck.y += wy * (hit.pen + 0.5);
 
-        if (Math.abs(dot) > 1.0) {
-            playGameSound('puck_pad_save', 0.5);
+        if (Math.abs(dot) > 2.0) {
+            playGameSound('puck_pad_save', 0.2);
         }
 
         return true;
