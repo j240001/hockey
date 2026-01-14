@@ -344,12 +344,18 @@ const resizeCanvas = () => {
 
 // start crowd audio
 function startCrowd() {
-    // Only start if not already playing
-    if (!sound.playing(crowdId)) {
-        crowdId = sound.play('crowd_loop');
-        sound.loop(true, crowdId);
-        sound.volume(0.3, crowdId); // Set your default crowd volume
+    // 1. SECURITY CHECK: Is the crowd supposed to be on?
+    if (!crowdEnabled) return; 
+
+    // 2. STOP GHOSTS: If a crowd is already playing, kill it first
+    if (sound.playing(crowdId)) {
+        sound.stop(crowdId);
     }
+
+    // 3. START FRESH
+    crowdId = sound.play('crowd_loop'); 
+    sound.loop(true, crowdId);
+    sound.volume(0.3, crowdId);
 }
 
 
