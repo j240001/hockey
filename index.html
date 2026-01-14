@@ -98,6 +98,10 @@
 // BASIC SETUP
 // =========================================================
 
+let crowdId = 0; // Global tracker
+let crowdEnabled = true;
+
+
 let masterCrowd = []; // This holds every fan's data
 let firstWhistleBlown = false; // Starts false, becomes true after the first whistle
 let currentDisappointment = 0;
@@ -338,6 +342,15 @@ const resizeCanvas = () => {
 
 
 
+// start crowd audio
+function startCrowd() {
+    // Only start if not already playing
+    if (!sound.playing(crowdId)) {
+        crowdId = sound.play('crowd_loop');
+        sound.loop(true, crowdId);
+        sound.volume(0.3, crowdId); // Set your default crowd volume
+    }
+}
 
 
 
@@ -1362,6 +1375,9 @@ document.addEventListener("keydown", (e) => {
 
     }
 
+    if (e.key.toLowerCase() === 'v') { // 'V' for toggle crowd audio
+        toggleCrowd();
+    }
 
 
     // --- BRIGHTNESS CONTROLS ---
@@ -1377,6 +1393,10 @@ document.addEventListener("keydown", (e) => {
         if (atmosphereTint < 0.0) atmosphereTint = 0.0; // Cap at 0% (Full Brightness)
         // console.log("Tint:", atmosphereTint.toFixed(2));
     }
+
+
+
+
 });
 
 
@@ -8609,6 +8629,29 @@ function updateCrowdAmbience() {
 }
 
 
+function toggleCrowd() {
+    crowdEnabled = !crowdEnabled;
+
+    if (crowdEnabled) {
+        // TURN ON: Fade from 0 to 0.3 over 1 second
+        if (!sound.playing(crowdId)) {
+             crowdId = sound.play('crowd_loop');
+             sound.loop(true, crowdId);
+        }
+        sound.fade(0, 0.3, 1000, crowdId);
+        console.log("Crowd ON");
+    } else {
+        // TURN OFF: Fade from current vol to 0, then stop
+        // We fade out first, then stop it to save CPU
+        sound.fade(sound.volume(crowdId), 0, 1000, crowdId);
+        
+        setTimeout(() => {
+            if (!crowdEnabled) sound.stop(crowdId);
+        }, 1000);
+        console.log("Crowd OFF");
+    }
+}
+
 
 // HELPER: Only play sounds if we are in a "Real Time" mode
 function playGameSound(name, volumeOverride) {
@@ -8678,7 +8721,6 @@ window.addEventListener('keydown', () => {
 
 </body>
 </html>
-
 
 
 
