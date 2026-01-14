@@ -8599,7 +8599,17 @@ function initAudio() {
 let currentAmbienceState = 'off'; 
 
 function updateCrowdAmbience() {
-    // 1. Determine if we SHOULD hear the crowd right now
+    // 1. MASTER OVERRIDE: If the user muted the crowd, force silence.
+    if (!crowdEnabled) {
+        if (currentAmbienceState === 'on') {
+            currentAmbienceState = 'off';
+            // Fade out everything
+            crowdLayers.forEach(id => sound.fade(sound.volume(id), 0, 1000, id));
+        }
+        return; 
+    }
+
+    // 2. Normal Logic (Only runs if crowdEnabled is TRUE)
     let shouldHear = false;
 
     // A. Normal Gameplay
@@ -8619,17 +8629,12 @@ function updateCrowdAmbience() {
     if (TRAINING_MODE && WATCH_MODE) shouldHear = true;
 
     // --- EXECUTE FADES ---
-
-    // CASE 1: Turn ON (Fade In)
     if (shouldHear && currentAmbienceState === 'off') {
         currentAmbienceState = 'on';
-        // Fade all layers from 0 to 0.15 over 2 seconds
         crowdLayers.forEach(id => sound.fade(0, 0.15, 2000, id));
     } 
-    // CASE 2: Turn OFF (Fade Out)
     else if (!shouldHear && currentAmbienceState === 'on') {
         currentAmbienceState = 'off';
-        // Fade all layers from current vol to 0 over 1 second
         crowdLayers.forEach(id => sound.fade(sound.volume(id), 0, 1000, id));
     }
 }
