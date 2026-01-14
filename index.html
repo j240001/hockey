@@ -4965,8 +4965,8 @@ function updateAISkater(p) {
 
 function checkPuckGoalieCollision(puck, g) {
     // --- 1. CONFIGURATION (Tune these numbers!) ---
-    const padDepth  = 2;    // How "thick" the pads are (Front to Back)
-    const padWidth  = 2;   // Width of ONE pad
+    const padDepth  = 3;    // How "thick" the pads are (Front to Back)
+    const padWidth  = 3;   // Width of ONE pad
     const gapWidth  = 2.5;  // The Five-Hole (Puck is diameter 3.0, so this fits easily)
     const fwdOffset = 6;    // How far "Forward" from the center point the pads sit
 
@@ -5042,6 +5042,10 @@ function checkPuckGoalieCollision(puck, g) {
         // Push Out (Prevent sticking)
         puck.x += wx * (hit.pen + 0.5);
         puck.y += wy * (hit.pen + 0.5);
+
+        if (Math.abs(dot) > 1.0) {
+            playGameSound('puck_pad_save', 0.5);
+        }
 
         return true;
     }
