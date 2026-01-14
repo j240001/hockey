@@ -8695,16 +8695,22 @@ function playGameSound(name, volumeOverride) {
 
 // Helper to handle Replay Ducking for ALL layers
 function setCrowdReplayMode(isReplay) {
+    // SECURITY CHECK: If crowd is muted, do NOT touch the volume.
+    if (!crowdEnabled) return; 
+
     crowdLayers.forEach(id => {
         if (isReplay) {
             // Duck all layers down to 5%
-            sound.fade(0.15, 0.05, 300, id); 
+            // We use sound.volume(id) as start point to avoid 'pops'
+            sound.fade(sound.volume(id), 0.05, 300, id); 
         } else {
-            // Bring all layers back to 15%
-            sound.fade(0.05, 0.15, 1000, id);
+            // Bring all layers back to 15% (Normal Volume)
+            sound.fade(sound.volume(id), 0.15, 1000, id);
         }
     });
 }
+
+
 
 // Initialize audio on first user interaction
 window.addEventListener('click', () => {
