@@ -3434,6 +3434,9 @@ function updateHumanSkater(p) {
     if (p.shootCooldown > 0) p.shootCooldown--;
     if (p.passCooldown > 0) p.passCooldown--;
 
+    // Initialize Lockout Flag if missing
+    if (typeof p.controlLockout === 'undefined') p.controlLockout = false;
+
     // =========================================================
     // 1. STATUS CHECKS
     // =========================================================
@@ -3472,15 +3475,10 @@ function updateHumanSkater(p) {
         } 
         // B. FIRE (Frame 9)
         else if (p.shotTick === 9) {
-            // Retrieve the power we calculated upon release
             const power = p.chargedShotPower || 12.0;
-            
-            // Manual Aiming (Straight ahead)
             const aimDist = 400;
             const targetX = p.x + Math.cos(p.angle) * aimDist;
             const targetY = p.y + Math.sin(p.angle) * aimDist;
-            
-            // Fire with calculated power
             shootPuck(p, power, { x: targetX, y: targetY }); 
         } 
         // C. FOLLOW THROUGH (Frames 10-20)
@@ -3492,7 +3490,6 @@ function updateHumanSkater(p) {
             p.isShooting = false; p.shotTick = 0; p.chargedShotPower = 0;
         }
         
-        // Drift Physics
         p.x += p.vx; p.y += p.vy;
         p.vx *= 0.98; p.vy *= 0.98;
         solveSkaterKinematics(p); 
@@ -3551,14 +3548,21 @@ function updateHumanSkater(p) {
     
     // A. WE HAVE THE PUCK (Pass/Shoot)
     if (!p.stickDropped && puck.ownerId === p.id) {
-        p.isPoking = false; // Cannot poke while holding puck
+        p.isPoking = false; 
 
         if (keys.Control) {
-            // --- CHARGING (Invisible) ---
-            p.controlHoldTimer++;
+            // *** LOCKOUT CHECK ***
+            // If we are "locked out", it means we obtained the puck while 
+            // the button was ALREADY held down (e.g. from a poke check).
+            // We must wait for release before charging starts.
+            if (!p.controlLockout) {
+                p.controlHoldTimer++;
+            }
         } 
         else {
-            // --- RELEASED! EXECUTE ACTION ---
+            // RELEASED!
+            p.controlLockout = false; // Reset the safety latch
+
             if (p.controlHoldTimer > 0) {
                 // Config: Thresholds
                 const PASS_MAX_FRAMES = 25;  
@@ -3606,14 +3610,20 @@ function updateHumanSkater(p) {
 
         if (keys.Control) {
             p.isPoking = true; 
+            // *** SET LOCKOUT ***
+            // Mark this button press as "Used for Poking". 
+            // If we steal the puck right now, the 'A' block above won't fire.
+            p.controlLockout = true; 
         } else {
             p.isPoking = false;
+            p.controlLockout = false;
         }
     }
     // C. NO STICK / ERROR
     else {
         p.controlHoldTimer = 0;
         p.isPoking = false;
+        p.controlLockout = false;
     }
 
     // =========================================================
@@ -3631,18 +3641,16 @@ function updateHumanSkater(p) {
     // =========================================================
     // 6. ANIMATION SYNC
     // =========================================================
-    // Only update pose if we are NOT shooting
     if (!p.isShooting) {
         p.visualBodyAngle = p.angle;
         
         let targetPose = { botX: 6.4, botY: 2.55, rot: 0, reach: 6.4 };
 
-        // *** POKE CHECK VISUALS ***
         if (p.isPoking) {
-            targetPose.reach = 16.0; // Reach far forward
-            targetPose.botX = 12.0;  // Lean body forward
-            targetPose.botY = 0.5;   // Center the stick
-            targetPose.rot = 10;     // Slight shoulder turn
+            targetPose.reach = 16.0; 
+            targetPose.botX = 12.0;  
+            targetPose.botY = 0.5;   
+            targetPose.rot = 10;     
         }
 
         p.pose.botX += (targetPose.botX - p.pose.botX) * 0.2;
@@ -3653,10 +3661,8 @@ function updateHumanSkater(p) {
         if (!p.stickDropped) applyStickHandling(p);
     }
     
-    // Always solve constraints
     solveSkaterKinematics(p);
     
-    // Sync Puck
     if (puck.ownerId === p.id) {
         let px = p.cradlePos.x;
         let py = p.cradlePos.y;
@@ -8730,6 +8736,7 @@ window.addEventListener('keydown', () => {
 
 </body>
 </html>
+
 
 
 
