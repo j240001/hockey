@@ -2703,47 +2703,35 @@ const puck = {
 // =========================================================
 function tryPickupPuck(p) {
     if (isResetActive()) return; 
-    if (p.stickDropped) return; // Can't pick up puck without a stick!
+    if (p.stickDropped) return; 
     if (puck.ownerId !== null) return;
 
-
-    // *** NEW: FACEOFF IMMUNITY CHECK ***
-    // If the puck is "slippery" (just dropped), ignore pickup attempts.
+    // Faceoff Immunity
     if (puck.pickupImmunityUntil && performance.now() < puck.pickupImmunityUntil) {
         return;
     }
-    // -----------------------------------
 
     const dx = puck.x - p.x;
     const dy = puck.y - p.y;
     
-    // 1. MAGNETISM: Give them a slightly larger reach for loose pucks
-    // Old: p.size/2 + puck.r + 5 (~12px)
-    // New: p.size/2 + puck.r + 8 (~15px) -> Easier to grab
+    // Interaction Distance
     const interactDist = p.size/2 + puck.r + 8;
 
     if (dx*dx + dy*dy <= interactDist*interactDist) {
         
-        // --- 2. THE FIX: SPEED CHECK ---
-        // If the puck is moving slowly (under 2.0 speed), it is FREE.
-        // No dice rolls. No bobbles. Just take it.
+        // 1. FREE PUCK (Moving Slow) -> Silent Pickup
         const puckSpeed = Math.hypot(puck.vx, puck.vy);
-        
         if (puckSpeed < 2.0) {
             puck.ownerId = p.id;
             puck.vx = 0; puck.vy = 0;
-            puck.isShot = false; // Reset shot flag
-            puck.lastOwnerId = p.id; // Claim ownership
+            puck.isShot = false; 
+            puck.lastOwnerId = p.id; 
             if (puck.passTargetId) puck.passTargetId = null;
             return;
         }
 
-        // ================================================================
-        // SCENARIO A: IT IS A SHOT (Dangerous Projectile)
-        // ================================================================
+        // 2. SHOT DEFLECTION (Dangerous Projectile)
         if (puck.isShot) {
-            // (Keep your existing shot deflection logic here)
-            // ...
              const hitChance = (p.team === getPlayerById(puck.lastOwnerId)?.team) ? 0.60 : 0.80;
             if (Math.random() > hitChance) return; 
 
@@ -2760,7 +2748,6 @@ function tryPickupPuck(p) {
             puck.vx = nvx;
             puck.vy = nvy;
 
-            // Dampening
             const isTeammate = (p.team === getPlayerById(puck.lastOwnerId)?.team);
             const dampening = isTeammate ? 0.75 : 0.40;
             puck.vx *= dampening;
@@ -2769,66 +2756,72 @@ function tryPickupPuck(p) {
             puck.x = p.x + nx * (interactDist + 2);
             puck.y = p.y + ny * (interactDist + 2);
             puck.isShot = false; 
+            
+            // +++ AUDIO: Deflection "Tick" +++
+            playGameSound('shoot_puck', 0.2); 
             return; 
         }
 
-        // ================================================================
-        // SCENARIO B: FAST PASS / BOUNCING PUCK
-        // ================================================================
+        // 3. PASS CATCH / INTERCEPTION
         let isTeammate = false;
         if (puck.lastOwnerId) {
             const prevOwner = getPlayerById(puck.lastOwnerId);
             if (prevOwner && prevOwner.team === p.team) isTeammate = true;
         }
 
-        // Teammate Pass (95% catch rate)
+        // A. Teammate Catch
         if (isTeammate) {
             if (Math.random() < 0.95) {
                 if (puck.passTargetId === p.id && window.BT8_STATS) window.BT8_STATS.completions++;
                 puck.passTargetId = null; 
                 puck.ownerId = p.id;
                 puck.vx = 0; puck.vy = 0;
+                
+                // +++ AUDIO: Crisp Catch +++
+                playGameSound('shoot_puck', 0.3);
                 return;
             } 
         }
-        // Enemy Pass / Loose Neutral Puck (40% steal rate)
-        // Only applies if puck is moving FAST (> 2.0)
+        // B. Interception / Steal
         else {
             if (Math.random() < 0.40) {
                 if (puck.passTargetId !== null) puck.passTargetId = null;
                 puck.ownerId = p.id;
                 puck.vx = 0; puck.vy = 0;
+                
+                // +++ AUDIO: Hard Interception +++
+                playGameSound('shoot_puck', 0.3);
                 return;
             }
         }
 
-        // 3. THE BOBBLE (Failed Catch / Slap-away)
+        // 4. THE BOBBLE (Failed Catch)
         if (puck.passTargetId !== null) puck.passTargetId = null;
 
         const dist = Math.sqrt(dx*dx + dy*dy);
         const nx = dx / dist; 
         const ny = dy / dist; 
-        
         const dot = puck.vx * nx + puck.vy * ny;
         
-        // --- THE SLAP-SHOT RANDOMIZER ---
-        // Calculate the pure reflection first
         let newVx = puck.vx - 2 * dot * nx;
         let newVy = puck.vy - 2 * dot * ny;
 
-        // Apply a random "scramble" to the reflection angle
         const scramble = (Math.random() - 0.5) * 0.3; 
         const cosS = Math.cos(scramble);
         const sinS = Math.sin(scramble);
         
-        puck.vx = (newVx * cosS - newVy * sinS) * 0.4; // 0.4 keeps it from flying too fast
+        puck.vx = (newVx * cosS - newVy * sinS) * 0.4; 
         puck.vy = (newVx * sinS + newVy * cosS) * 0.4;
-        // --------------------------------
         
         puck.x = p.x + nx * (interactDist + 2);
         puck.y = p.y + ny * (interactDist + 2);
+        
+        // +++ AUDIO: Fumble/Bobble +++
+        playGameSound('puck_board', 0.2); // Dull thud for a miss
     }
 }
+
+
 
 
 
@@ -2987,7 +2980,7 @@ function passPuckToTeammate(p, target) {
 
     puck.lastOwnerId = p.id;
     ejectPuckFromOwner(p); 
-    playGameSound('shoot_puck', 0.4);
+    // playGameSound('shoot_puck', 0.4);
 
     const dirX = dx / aimDist;
     const dirY = dy / aimDist;
@@ -8737,7 +8730,6 @@ window.addEventListener('keydown', () => {
 
 </body>
 </html>
-
 
 
 
