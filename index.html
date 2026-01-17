@@ -3076,20 +3076,16 @@ function resolvePlayerCollisions() {
                 const nx = dx / dist;
                 const ny = dy / dist;
 
-                // --- 1. MASS RATIOS (The Fix) ---
-                // Skaters = Mass 1.0
-                // Goalies = Mass 10.0 (Sturdy, but not infinite)
+                // --- 1. MASS RATIOS ---
+                // Skaters = Mass 1.0, Goalies = Mass 10.0
                 const massA = (a.type === "goalie") ? 10.0 : 1.0;
                 const massB = (b.type === "goalie") ? 10.0 : 1.0;
                 const totalMass = massA + massB;
 
-                // Calculate who moves how much
-                // Lighter object moves MORE. Heavier object moves LESS.
                 const aRatio = massB / totalMass; 
                 const bRatio = massA / totalMass; 
 
                 // --- 2. POSITIONAL CORRECTION ---
-                // Move them apart based on their mass ratio
                 const overlap = (minDist - dist);
                 a.x -= nx * overlap * aRatio;
                 a.y -= ny * overlap * aRatio;
@@ -3109,21 +3105,23 @@ function resolvePlayerCollisions() {
                 const impulseX = jImpulse * nx;
                 const impulseY = jImpulse * ny;
 
-                // Apply force (Heavy objects resist velocity change more)
                 a.vx -= impulseX * aRatio;
                 a.vy -= impulseY * aRatio;
                 b.vx += impulseX * bRatio;
                 b.vy += impulseY * bRatio;
 
-                // --- 4. IMPACT & STUN LOGIC ---
-                const impactForce = Math.abs(jImpulse);
+                // --- 4. IMPACT & STUN LOGIC (FIXED) ---
+                // We multiply by 0.5 to match the original game's tuning scale.
+                // Without this, every hit registers as double strength.
+                const impactForce = Math.abs(jImpulse) * 0.5;
+
                 if (impactForce > 1.50 && a.team !== b.team) {
                     let stunFrames = impactForce * 12;
                     if (stunFrames < 15) stunFrames = 15;
                     if (stunFrames > 90) stunFrames = 90;
                     stunFrames = Math.floor(stunFrames);
 
-                    // Apply stun based on who took the brunt of the movement
+                    // Apply stun based on who moved the most
                     if (aRatio > 0.3) applyStun(a, stunFrames, impactForce);
                     if (bRatio > 0.3) applyStun(b, stunFrames, impactForce);
                 }
@@ -8739,6 +8737,7 @@ window.addEventListener('keydown', () => {
 
 </body>
 </html>
+
 
 
 
