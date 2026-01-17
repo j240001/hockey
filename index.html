@@ -8662,29 +8662,48 @@ function toggleCrowd() {
 }
 
 
-// HELPER: Only play sounds if we are in a "Real Time" mode
+// =========================================================
+// AUDIO COOLDOWN CONFIGURATION
+// =========================================================
+const SOUND_COOLDOWNS = {
+    // Fast SFX (Brief delay to stop "phasing/flanging")
+    'shoot_puck': 80,      // Catching/Shooting
+    'puck_board': 80,      // Hitting boards
+    'puck_pad_save': 100,  // Goalie save
+    
+    // Events (Long delays to prevent spam)
+    'referee_whistle': 4000, // Only one whistle per stoppage
+    'goal_horn': 15000,      // Let the horn finish before re-triggering
+    
+    // Future Announcer Keys (Placeholders)
+    'bob_intro': 10000,
+    'bob_goal': 5000
+};
+
+// State tracker
+const lastSoundTime = {};
+
 function playGameSound(name, volumeOverride) {
-    // 1. TRAINING MODE CHECK
-    // If training, only play if we are explicitly watching
+    // 1. GAME MODE CHECKS (Silence sounds during fast-forward sim)
     if (TRAINING_MODE && !WATCH_MODE) return; 
+    if (gameState === 'tournament' && typeof Tournament !== 'undefined' && !Tournament.watchMode) return;
+    if (gameState === 'playoffs' && typeof Playoffs !== 'undefined' && !Playoffs.watchMode) return;
 
-    // 2. TOURNAMENT MODE CHECK
-    if (gameState === 'tournament') {
-        // If the Tournament object exists but we aren't watching, MUTE.
-        // (Assuming 'watchMode' is the flag toggled by 'W')
-        if (typeof Tournament !== 'undefined' && !Tournament.watchMode) return;
-    }
+    // 2. COOLDOWN CHECK
+    const now = performance.now();
+    
+    // Default to 50ms protection if not listed in config
+    const cooldown = SOUND_COOLDOWNS[name] || 50; 
+    const last = lastSoundTime[name] || 0;
 
-    // 3. PLAYOFFS MODE CHECK
-    if (gameState === 'playoffs') {
-        // If the Playoffs object exists but we aren't watching, MUTE.
-        if (typeof Playoffs !== 'undefined' && !Playoffs.watchMode) return;
-    }
+    // If too soon, BLOCK the sound
+    if (now - last < cooldown) return; 
 
-    // 4. Play the sound (Passed all checks)
+    // 3. PLAY THE SOUND
+    lastSoundTime[name] = now; // Update timestamp
     var id = sound.play(name);
     
-    // 5. Apply Volume if provided
+    // 4. APPLY VOLUME
     if (volumeOverride !== undefined) {
         sound.volume(volumeOverride, id);
     }
@@ -8736,7 +8755,6 @@ window.addEventListener('keydown', () => {
 
 </body>
 </html>
-
 
 
 
