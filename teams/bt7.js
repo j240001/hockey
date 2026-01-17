@@ -363,6 +363,44 @@ function getPositionWithinLimits(p, bb, d) {
 
     return { tx: moveX, ty: moveY, action: "none" };
 }
+    function findBackdoorTarget(p, maxDist = 100, minOpen = 50, goalieLimit = 60) {
+        const enemyGoalX = (p.team === 0 ? (typeof goal2!=='undefined'?goal2:825) : (typeof goal1!=='undefined'?goal1:175));
+        const RY_VAL = (typeof RY!=='undefined'?RY:300);
+        
+        // PARALLAX FIX
+        const startX = (p.bladePos && !isNaN(p.bladePos.x)) ? p.bladePos.x : p.x;
+        const startY = (p.bladePos && !isNaN(p.bladePos.y)) ? p.bladePos.y : p.y;
+        
+        for (const mate of players) {
+            if (mate.team !== p.team || mate.id === p.id || mate.type !== "skater") continue;
+            if (Math.abs(mate.x) < 110) continue;
+            if (Math.hypot(mate.x - enemyGoalX, mate.y - RY_VAL) > maxDist) continue; 
+
+            let isCovered = false;
+            for (const opp of players) {
+                if (opp.team === p.team) continue;
+                if (Math.hypot(opp.x - mate.x, opp.y - mate.y) < minOpen) { isCovered = true; break; }
+            }
+            if (isCovered) continue;
+
+            const g = players.find(m => m.team !== p.team && m.type === 'goalie');
+            if (g && Math.hypot(g.x - mate.x, g.y - mate.y) < goalieLimit) continue;
+
+            // Check from Blade
+            if (typeof isLaneBlocked === 'function' && isLaneBlocked(startX, startY, mate.x, mate.y, p.team)) continue;
+            
+            return mate;
+        }
+        return null;
+    }
+    function getBackdoorPosition(p) {
+        const goalX = (p.team === 0 ? (typeof goal2!=='undefined'?goal2:825) : (typeof goal1!=='undefined'?goal1:175));
+        const RY_VAL = (typeof RY!=='undefined'?RY:300);
+        const dir = (p.team === 0) ? -1 : 1; 
+        const tx = goalX + (dir * 40); 
+        const ty = (puck.y < RY_VAL) ? (RY_VAL + 70) : (RY_VAL - 70); 
+        return { tx, ty, action: "none" };
+    }
     function getAggressiveGapTarget(defender, carrier, goalX) {
         const IDEAL_GAP = 75; const MIN_DIST_FROM_NET = 80;
         const gx = goalX; const gy = (typeof RY!=='undefined'?RY:300);
@@ -384,6 +422,85 @@ function getPositionWithinLimits(p, bb, d) {
         const isBeat = distToCarrier < myDistToNet;
         if (isBeat || distToTarget > 120) { return { tx: tx, ty: ty, action: "none" }; }
         return { tx: tx, ty: ty, action: "none" }; 
+    }
+    function checkTeammatesOffside(p) {
+        const forwardDir = (p.team === 0 ? 1 : -1);
+        const blueLineX = 500 + (forwardDir * 110);
+        for(const m of players) {
+            if(m.team === p.team && m.id !== p.id && m.type === 'skater') {
+                if((m.x - blueLineX) * forwardDir > 5) return true;
+            }
+        }
+        return false;
+    }
+    function evadePressure(bb) {
+        let escX = 0, escY = 0, count = 0;
+        for(const o of players) {
+            if(o.team !== bb.p.team && Math.hypot(bb.p.x - o.x, bb.p.y - o.y) < 100) {
+                escX += (bb.p.x - o.x); escY += (bb.p.y - o.y); count++;
+            }
+        }
+        if(count===0) return {tx: 500, ty: 300, action:'none'}; // SAFETY
+        return {tx: bb.p.x + escX, ty: bb.p.y + escY, action:'none'};
+    }
+
+
+    function getDynamicCarry(p, bb) {
+    const FORWARD_DIST = 120;
+    const EVADE_RADIUS = 100;
+    
+    // 1. Initial Forward Intent (The Football Receiver route)
+    let tx = p.x + (bb.forwardDir * FORWARD_DIST);
+    let ty = p.y;
+
+    // 2. Sum up the "Push" from nearby enemies
+    let pushX = 0;
+    let pushY = 0;
+    let count = 0;
+
+    for (const o of players) {
+        if (o.team !== p.team) {
+            const dist = Math.hypot(p.x - o.x, p.y - o.y);
+            if (dist < EVADE_RADIUS) {
+                // The closer they are, the harder they "push" the path away
+                const force = (EVADE_RADIUS - dist) / EVADE_RADIUS;
+                pushX += (p.x - o.x) * force;
+                pushY += (p.y - o.y) * force;
+                count++;
+            }
+        }
+    }
+
+    // 3. Blend the forward intent with the evasion push
+    if (count > 0) {
+        tx += pushX * 1.5; // Multiply push to make the weave more noticeable
+        ty += pushY * 1.5;
+    }
+
+    // 4. Stay on the Rink
+    ty = Math.max(170, Math.min(430, ty));
+
+    return { tx: tx, ty: ty, action: "none" };
+    }
+
+    function hoverDynamicLine(bb) {
+        const defendingRight = (bb.myGoalX > 500);
+        let deepest = null;
+        for (const pl of players) {
+            if (pl.type !== "skater" || pl.id === bb.p.id) continue;
+            if (!deepest) { deepest = pl; continue; }
+            if (defendingRight) { if (pl.x > deepest.x) deepest = pl; }
+            else { if (pl.x < deepest.x) deepest = pl; }
+        }
+        if (!deepest) return { tx: bb.p.x + 1, ty: bb.p.y, action: "none" };
+        const gap = 80;
+        return { tx: (defendingRight ? deepest.x + gap : deepest.x - gap), ty: (typeof RY!=='undefined'?RY:300), action: "none" };
+    }
+    function clearPuckDefensive(p) {
+        const forwardDir = (p.team === 0 ? 1 : -1);
+        const targetX = p.x + forwardDir * 200;
+        const Y_HIGH = (typeof RY!=='undefined'?RY:300) - 150, Y_LOW = (typeof RY!=='undefined'?RY:300) + 150;
+        return { tx: targetX, ty: (Math.abs(p.y - Y_HIGH) < Math.abs(p.y - Y_LOW) ? Y_HIGH : Y_LOW), action: "shoot" };
     }
 
     function makeBB(p) {
@@ -412,47 +529,51 @@ function getPositionWithinLimits(p, bb, d) {
 
     // --- TREES ---
     const TREE_C = 
-        new SelectorNode([            new SequenceNode([                new ConditionNode(bb => bb.oppHasPuck),
-                new ConditionNode(bb => { try { return (typeof amILastMan === 'function' ? amILastMan(bb.p) : false); } catch(e){return false;} }),
-                new ActionNode(bb => { try { return (typeof getAggressiveGapTarget === 'function' ? getAggressiveGapTarget(bb.p, (typeof getPuckCarrier === 'function' ? getPuckCarrier() : puck), bb.myGoalX) : {tx:bb.p.x,ty:bb.p.y,action:'none'}); } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:'none'};} })]),
-            new SequenceNode([                new ConditionNode(bb => bb.oppHasPuck),
-                new ConditionNode(bb => {let myD=Math.hypot(bb.p.x-puck.x,bb.p.y-puck.y); if(60>0 && myD<60) return true; let c=null,d=9999; for(let m of players){if(m.team===bb.p.team && m.type==='skater'){let dist=Math.hypot(m.x-puck.x,m.y-puck.y);if(dist<d){d=dist;c=m;}}}return c&&c.id===bb.p.id;}),
-                new ActionNode(bb => { try { const t = (typeof getPuckIntercept === 'function') ? getPuckIntercept(bb.p, 1.5) : { x: puck.x, y: puck.y }; return { tx: t.x, ty: t.y, action: "none" }; } catch(e) { return { tx: bb.p.x, ty: bb.p.y, action: "none" }; } }, "Intercept")]),
-            new SequenceNode([                new ConditionNode(bb => bb.loosePuck),
-                new ConditionNode(bb => {let myD=Math.hypot(bb.p.x-puck.x,bb.p.y-puck.y); if(40>0 && myD<40) return true; let c=null,d=9999; for(let m of players){if(m.team===bb.p.team && m.type==='skater'){let dist=Math.hypot(m.x-puck.x,m.y-puck.y);if(dist<d){d=dist;c=m;}}}return c&&c.id===bb.p.id;}),
-                new ActionNode(bb => { try { const t = (typeof getPuckIntercept === 'function') ? getPuckIntercept(bb.p, 1.5) : { x: puck.x, y: puck.y }; return { tx: t.x, ty: t.y, action: "none" }; } catch(e) { return { tx: bb.p.x, ty: bb.p.y, action: "none" }; } }, "Intercept")]),
+        new SelectorNode([            new ActionNode(bb => intel_test(bb), "Intel Scan"),
+            new ActionNode(bb => carrier_intel(bb, 1), "Carrier Intel"),
             new SequenceNode([                new ConditionNode(bb => bb.hasPuck),
-                new ConditionNode(bb => {let d=80||250; return Math.hypot(bb.enemyGoal-bb.p.x, (typeof RY!=='undefined'?RY:300)-bb.p.y) < d;}),
-                new ActionNode(bb => getSmartShootTarget(bb.p, bb, 15, 10), "smartshoot")]),
+                new ConditionNode(bb => {let d=150||250; return Math.hypot(bb.enemyGoal-bb.p.x, (typeof RY!=='undefined'?RY:300)-bb.p.y) < d;}),
+                new ActionNode(bb => getSmartShootTarget(bb.p, bb, 10, 5), "smartshoot")]),
             new SequenceNode([                new ConditionNode(bb => bb.hasPuck),
-                new ConditionNode(bb => bb.puckInOffZone),
-                new ActionNode(bb => { try { const t = (typeof findLeastGuardedInZone === 'function' ? findLeastGuardedInZone(bb.p, bb) : null); if(t){ return {tx:t.x, ty:t.y, action:"pass", target:t}; } return "FAILURE"; } catch(e){return "FAILURE";} }, "OZONE R PASS")]),
-            new SequenceNode([                new ConditionNode(bb => bb.hasPuck),
-                new ConditionNode(bb => (bb.p.carrier_patience_dist || 9999) < 80),
+                new ConditionNode(bb => { try { const t = (typeof findBackdoorTarget === 'function' ? findBackdoorTarget(bb.p, 150, 40, 90) : null); if(t && Math.abs(t.x) > 110){bb.passTarget=t; return true;} return false; } catch(e){return false;} }),
                 new ActionNode(bb => pass_test(bb, 40), "Pass Test")]),
+            new SequenceNode([                new ConditionNode(bb => bb.hasPuck),
+                new ConditionNode(bb => (bb.p.carrier_patience_dist || 9999) < 20),
+                new ActionNode(bb => pass_test(bb, 30), "Pass Test")]),
             new SequenceNode([                new ConditionNode(bb => bb.puckInDefZone),
                 new ConditionNode(bb => bb.hasPuck),
-                new ConditionNode(bb => { try { bb.carryTarget={x:bb.p.x+bb.forwardDir*100,y:bb.p.y}; return (typeof isLaneBlocked === 'function' ? !isLaneBlocked(bb.p.x,bb.p.y,bb.carryTarget.x,bb.carryTarget.y,bb.p.team) : true); } catch(e){return true;} }),
-                new ActionNode(bb => { if(bb.carryTarget)return{tx:bb.carryTarget.x,ty:bb.carryTarget.y,action:"none"}; return {tx:bb.enemyGoal,ty:(typeof RY !== 'undefined' ? RY : 300),action:"none"}; }, "Carry")]),
+                new ActionNode(bb => ({ tx: bb.p.x + (bb.forwardDir * 150), ty: bb.p.y, action: "none" }), "Lane Carry")]),
             new SequenceNode([                new ConditionNode(bb => bb.puckInNeuZone),
                 new ConditionNode(bb => bb.hasPuck),
-                new ConditionNode(bb => { try { bb.carryTarget={x:bb.p.x+bb.forwardDir*100,y:bb.p.y}; return (typeof isLaneBlocked === 'function' ? !isLaneBlocked(bb.p.x,bb.p.y,bb.carryTarget.x,bb.carryTarget.y,bb.p.team) : true); } catch(e){return true;} }),
-                new ActionNode(bb => { if(bb.carryTarget)return{tx:bb.carryTarget.x,ty:bb.carryTarget.y,action:"none"}; return {tx:bb.enemyGoal,ty:(typeof RY !== 'undefined' ? RY : 300),action:"none"}; }, "Carry")]),
+                new ActionNode(bb => ({ tx: bb.p.x + (bb.forwardDir * 150), ty: bb.p.y, action: "none" }), "Lane Carry")]),
+            new SequenceNode([                new ConditionNode(bb => bb.oppHasPuck),
+                new ConditionNode(bb => bb.puckInOffZone),
+                new ConditionNode(bb => {let myD=Math.hypot(bb.p.x-puck.x,bb.p.y-puck.y); if(50>0 && myD<50) return true; let c=null,d=9999; for(let m of players){if(m.team===bb.p.team && m.type==='skater'){let dist=Math.hypot(m.x-puck.x,m.y-puck.y);if(dist<d){d=dist;c=m;}}}return c&&c.id===bb.p.id;}),
+                new ActionNode(bb => { try { const t = (typeof getPuckIntercept === 'function') ? getPuckIntercept(bb.p, 1.5) : { x: puck.x, y: puck.y }; return { tx: t.x, ty: t.y, action: "none" }; } catch(e) { return { tx: bb.p.x, ty: bb.p.y, action: "none" }; } }, "Intercept")]),
+            new SequenceNode([                new ConditionNode(bb => bb.oppHasPuck),
+                new ConditionNode(bb => {let myD=Math.hypot(bb.p.x-puck.x,bb.p.y-puck.y); if(50>0 && myD<50) return true; let c=null,d=9999; for(let m of players){if(m.team===bb.p.team && m.type==='skater'){let dist=Math.hypot(m.x-puck.x,m.y-puck.y);if(dist<d){d=dist;c=m;}}}return c&&c.id===bb.p.id;}),
+                new ActionNode(bb => { try { const t = (typeof getPuckIntercept === 'function') ? getPuckIntercept(bb.p, 1.5) : { x: puck.x, y: puck.y }; return { tx: t.x, ty: t.y, action: "none" }; } catch(e) { return { tx: bb.p.x, ty: bb.p.y, action: "none" }; } }, "Intercept")]),
+            new SequenceNode([                new ConditionNode(bb => bb.loosePuck),
+                new ConditionNode(bb => {let myD=Math.hypot(bb.p.x-puck.x,bb.p.y-puck.y); if(150>0 && myD<150) return true; let c=null,d=9999; for(let m of players){if(m.team===bb.p.team && m.type==='skater'){let dist=Math.hypot(m.x-puck.x,m.y-puck.y);if(dist<d){d=dist;c=m;}}}return c&&c.id===bb.p.id;}),
+                new ActionNode(bb => { try { const t = (typeof getPuckIntercept === 'function') ? getPuckIntercept(bb.p, 1.5) : { x: puck.x, y: puck.y }; return { tx: t.x, ty: t.y, action: "none" }; } catch(e) { return { tx: bb.p.x, ty: bb.p.y, action: "none" }; } }, "Intercept")]),
             new SequenceNode([                new ConditionNode(bb => bb.puckInOffZone),
-                new ConditionNode(bb => bb.hasPuck),
-                new ActionNode(bb => ({ tx: bb.enemyGoal - (bb.forwardDir * 40), ty: (typeof RY !== 'undefined' ? RY : 300), action: "none" }), "Drive Net")]),
+                new ConditionNode(bb => bb.teamHasPuck),
+                new ActionNode(bb => { try { return (typeof getPositionWithinLimits === 'function' ? getPositionWithinLimits(bb.p, bb, {"type":"actGoToPosition","cat":"act","minDistOwnGoal":"450","minDistOppGoal":"50","minDistLeftBoard":"100","minDistRightBoard":"100"}) : {tx:bb.p.x,ty:bb.p.y,action:'none'}); } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:'none'};} }, "Go To Pos")]),
+            new SequenceNode([                new ConditionNode(bb => bb.puckInNeuZone),
+                new ConditionNode(bb => bb.teamHasPuck),
+                new ActionNode(bb => { try { return (typeof getPositionWithinLimits === 'function' ? getPositionWithinLimits(bb.p, bb, {"type":"actGoToPosition","cat":"act","minDistOwnGoal":"350","minDistOppGoal":"250","minDistLeftBoard":"150","minDistRightBoard":"150"}) : {tx:bb.p.x,ty:bb.p.y,action:'none'}); } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:'none'};} }, "Go To Pos")]),
             new SequenceNode([                new ConditionNode(bb => { try { return (typeof getFormationZone==='function' ? getFormationZone(puck.x, bb.p.team)===1 : false); } catch(e){return false;} }),
-                new ActionNode(bb => { try { return (typeof getPositionWithinLimits === 'function' ? getPositionWithinLimits(bb.p, bb, {"type":"actGoToPosition","cat":"act","minDistOwnGoal":"100","minDistOppGoal":"450","minDistLeftBoard":"100","minDistRightBoard":"100"}) : {tx:bb.p.x,ty:bb.p.y,action:'none'}); } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:'none'};} }, "Go To Pos")]),
+                new ActionNode(bb => { try { return (typeof getPositionWithinLimits === 'function' ? getPositionWithinLimits(bb.p, bb, {"type":"actGoToPosition","cat":"act","minDistOwnGoal":"150","minDistOppGoal":"440","minDistLeftBoard":"150","minDistRightBoard":"150"}) : {tx:bb.p.x,ty:bb.p.y,action:'none'}); } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:'none'};} }, "Go To Pos")]),
             new SequenceNode([                new ConditionNode(bb => { try { return (typeof getFormationZone==='function' ? getFormationZone(puck.x, bb.p.team)===2 : false); } catch(e){return false;} }),
-                new ActionNode(bb => { try { return (typeof getPositionWithinLimits === 'function' ? getPositionWithinLimits(bb.p, bb, {"type":"actGoToPosition","cat":"act","minDistOwnGoal":"200","minDistOppGoal":"300","minDistLeftBoard":"100","minDistRightBoard":"100"}) : {tx:bb.p.x,ty:bb.p.y,action:'none'}); } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:'none'};} }, "Go To Pos")]),
+                new ActionNode(bb => { try { return (typeof getPositionWithinLimits === 'function' ? getPositionWithinLimits(bb.p, bb, {"type":"actGoToPosition","cat":"act","minDistOwnGoal":"200","minDistOppGoal":"390","minDistLeftBoard":"150","minDistRightBoard":"150"}) : {tx:bb.p.x,ty:bb.p.y,action:'none'}); } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:'none'};} }, "Go To Pos")]),
             new SequenceNode([                new ConditionNode(bb => { try { return (typeof getFormationZone==='function' ? getFormationZone(puck.x, bb.p.team)===3 : false); } catch(e){return false;} }),
-                new ActionNode(bb => { try { return (typeof getPositionWithinLimits === 'function' ? getPositionWithinLimits(bb.p, bb, {"type":"actGoToPosition","cat":"act","minDistOwnGoal":"300","minDistOppGoal":"200","minDistLeftBoard":"100","minDistRightBoard":"100"}) : {tx:bb.p.x,ty:bb.p.y,action:'none'}); } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:'none'};} }, "Go To Pos")]),
+                new ActionNode(bb => { try { return (typeof getPositionWithinLimits === 'function' ? getPositionWithinLimits(bb.p, bb, {"type":"actGoToPosition","cat":"act","minDistOwnGoal":"250","minDistOppGoal":"340","minDistLeftBoard":"150","minDistRightBoard":"150"}) : {tx:bb.p.x,ty:bb.p.y,action:'none'}); } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:'none'};} }, "Go To Pos")]),
             new SequenceNode([                new ConditionNode(bb => { try { return (typeof getFormationZone==='function' ? getFormationZone(puck.x, bb.p.team)===4 : false); } catch(e){return false;} }),
-                new ActionNode(bb => { try { return (typeof getPositionWithinLimits === 'function' ? getPositionWithinLimits(bb.p, bb, {"type":"actGoToPosition","cat":"act","minDistOwnGoal":"400","minDistOppGoal":"200","minDistLeftBoard":"100","minDistRightBoard":"100"}) : {tx:bb.p.x,ty:bb.p.y,action:'none'}); } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:'none'};} }, "Go To Pos")]),
+                new ActionNode(bb => { try { return (typeof getPositionWithinLimits === 'function' ? getPositionWithinLimits(bb.p, bb, {"type":"actGoToPosition","cat":"act","minDistOwnGoal":"300","minDistOppGoal":"450","minDistLeftBoard":"150","minDistRightBoard":"150"}) : {tx:bb.p.x,ty:bb.p.y,action:'none'}); } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:'none'};} }, "Go To Pos")]),
             new SequenceNode([                new ConditionNode(bb => { try { return (typeof getFormationZone==='function' ? getFormationZone(puck.x, bb.p.team)===5 : false); } catch(e){return false;} }),
-                new ActionNode(bb => { try { return (typeof getPositionWithinLimits === 'function' ? getPositionWithinLimits(bb.p, bb, {"type":"actGoToPosition","cat":"act","minDistOwnGoal":"450","minDistOppGoal":"0","minDistLeftBoard":"100","minDistRightBoard":"100"}) : {tx:bb.p.x,ty:bb.p.y,action:'none'}); } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:'none'};} }, "Go To Pos")]),
+                new ActionNode(bb => { try { return (typeof getPositionWithinLimits === 'function' ? getPositionWithinLimits(bb.p, bb, {"type":"actGoToPosition","cat":"act","minDistOwnGoal":"440","minDistOppGoal":"0","minDistLeftBoard":"50","minDistRightBoard":"50"}) : {tx:bb.p.x,ty:bb.p.y,action:'none'}); } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:'none'};} }, "Go To Pos")]),
             new SequenceNode([                new ConditionNode(bb => { try { return (typeof getFormationZone==='function' ? getFormationZone(puck.x, bb.p.team)===6 : false); } catch(e){return false;} }),
-                new ActionNode(bb => { try { return (typeof getPositionWithinLimits === 'function' ? getPositionWithinLimits(bb.p, bb, {"type":"actGoToPosition","cat":"act","minDistOwnGoal":"500","minDistOppGoal":"0","minDistLeftBoard":"100","minDistRightBoard":"100"}) : {tx:bb.p.x,ty:bb.p.y,action:'none'}); } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:'none'};} }, "Go To Pos")])]);
+                new ActionNode(bb => { try { return (typeof getPositionWithinLimits === 'function' ? getPositionWithinLimits(bb.p, bb, {"type":"actGoToPosition","cat":"act","minDistOwnGoal":"440","minDistOppGoal":"0","minDistLeftBoard":"50","minDistRightBoard":"50"}) : {tx:bb.p.x,ty:bb.p.y,action:'none'}); } catch(e){return {tx:bb.p.x,ty:bb.p.y,action:'none'};} }, "Go To Pos")])]);
     const TREE_LW = 
         new SelectorNode([            new SequenceNode([                new ConditionNode(bb => bb.oppHasPuck),
                 new ConditionNode(bb => { try { return (typeof amILastMan === 'function' ? amILastMan(bb.p) : false); } catch(e){return false;} }),
