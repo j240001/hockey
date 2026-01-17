@@ -1015,7 +1015,10 @@ let puckStealCooldown = 0;
 
 let netPinTimer = 0; // Tracks how long a player is stuck on the net
 
-let goalieFreezeTimer = 0;
+// let goalieFreezeTimer = 0;
+let goalieHoldFrames = 0;
+// let harassmentStart = 0;
+let harassmentFrames = 0;
 
 let shootIndicator = "red";   // "red" | "yellow" | "green"
 let shootReason = "";
@@ -1049,7 +1052,7 @@ let whistleEndTimer = null; // Time when the whistle pause ends
 let whistleMessage = "";    // Message to display during whistle
 let goalieHarassed = false;  // Flag to avoid spam-whistling
 let goalieLocked = false;
-let harassmentStart = 0;
+
 let goalieDumpAttempts = 0;
 let deadPuckTimer = 0;
 
@@ -2220,7 +2223,7 @@ function whistle(reason, durationMs = 2000) {
     whistleEndTimer = performance.now() + durationMs; 
     
     // Clear the goalie freeze timer, as the possession is ending
-    goalieFreezeTimer = 0; 
+    goalieHoldFrames = 0; 
     
     // The actual faceoff will occur when 'loop' detects whistleEndTimer has passed.
     // console.log("WHISTLE:", reason);
@@ -2326,12 +2329,12 @@ function checkGoalieHarassment() {
     const goalie = getPlayerById(puck.ownerId);
     if (!goalie || goalie.type !== "goalie") return false;
 
-    // Wider radius
+    // Check for close opponents
     let closeOpp = false;
     for (const opp of players) {
         if (opp.team !== goalie.team) {
             const d = Math.hypot(opp.x - goalie.x, opp.y - goalie.y);
-            if (d < 22) {          // was 12 → way too small
+            if (d < 22) {
                 closeOpp = true;
                 break;
             }
@@ -2341,25 +2344,22 @@ function checkGoalieHarassment() {
     // Not close → unlock immediately
     if (!closeOpp) {
         goalieLocked = false;
-        harassmentStart = 0;
+        harassmentFrames = 0; // FIX: Reset frame counter
         return false;
     }
 
-    // FIRST moment harassment begins
-    if (!goalieLocked) {
-        goalieLocked = true;
-        harassmentStart = performance.now();
-    }
-
-    // require long harassment before freeze
-    const HARASS_DELAY = 2000;  // milliseconds
+    // Harassment active
+    goalieLocked = true;
+    harassmentFrames++; // FIX: Increment frame counter
 
     puck.ownerId = goalie.id;
     puck.vx = 0;
     puck.vy = 0;
 
-    if (performance.now() - harassmentStart > HARASS_DELAY) {
+    // FIX: Freeze after 120 frames (2 seconds game time)
+    if (harassmentFrames > 120) {
         whistle("Goalie Freezes Puck", 2500);
+        harassmentFrames = 0;
     }
 
     return true;
@@ -2666,7 +2666,7 @@ const puck = {
                         
                         if (Math.random() < catchChance) {
                             this.ownerId = g.id; this.vx = 0; this.vy = 0;
-                            if (typeof goalieFreezeTimer !== 'undefined') goalieFreezeTimer = performance.now(); 
+                            if (typeof goalieFreezeTimer !== 'undefined') goalieHoldFrames = 0; 
                             return;
                         }
                         
@@ -2707,7 +2707,8 @@ function tryPickupPuck(p) {
     if (puck.ownerId !== null) return;
 
     // Faceoff Immunity
-    if (puck.pickupImmunityUntil && performance.now() < puck.pickupImmunityUntil) {
+    if (puck.pickupImmunityFrames > 0) {
+        puck.pickupImmunityFrames--; 
         return;
     }
 
@@ -5049,19 +5050,20 @@ function updateGoalie(p) {
         const puckSpeed = Math.hypot(puck.vx, puck.vy);
         if (dist < 32 && puckSpeed < 0.05) {
             puck.ownerId = p.id; puck.vx = 0; puck.vy = 0;
-            goalieFreezeTimer = performance.now(); 
+            goalieHoldFrames = 0; 
             return; 
         }
     }
 
     // --- POSSESSION LOGIC ---
     if (owned) {
+        goalieHoldFrames++;
         const stickDist = p.size / 2 + owned.r + 3;
         owned.x = p.x + Math.cos(p.angle) * stickDist;
         owned.y = p.y + Math.sin(p.angle) * stickDist;
         owned.vx = 0; owned.vy = 0;
 
-        if (performance.now() - goalieFreezeTimer > 600) {
+        if (goalieHoldFrames > 40) {
             const target = findGoaliePassTarget(p);
             if (target) {
                 p.angle = Math.atan2(target.y - p.y, target.x - p.x);
@@ -5071,7 +5073,9 @@ function updateGoalie(p) {
                 p.angle = weAttackRight ? 0 : Math.PI;
                 shootPuck(p, 10.0); 
             }
-            puckStealCooldown = 30; goalieFreezeTimer = 0; goalieLocked = false;
+            puckStealCooldown = 30; 
+            goalieHoldFrames = 0; 
+            goalieLocked = false;
             return;
         }
         return;
@@ -6376,11 +6380,10 @@ function processFaceoffDrop() {
     puck.vy = dropVy;
     
     // 3. Apply Immunity (Prevents center from instantly grabbing it)
-    puck.pickupImmunityUntil = performance.now() + 350;
+    // puck.pickupImmunityUntil = performance.now() + 350;
+    puck.pickupImmunityFrames = 25;
     
     puck.isShot = false; 
-    
-    // Reset ownership
     puck.ownerId = null;
     puck.passTargetId = null; 
     puck.lastOwnerId = null; 
@@ -6435,7 +6438,7 @@ function doGoalReset() {
     puck.vx = 0;
     puck.vy = 0;
     puck.ownerId = null;
-    goalieFreezeTimer = 0;
+    goalieHoldFrames = 0;
 
 
     doFaceoffReset();
