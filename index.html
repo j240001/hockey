@@ -3017,52 +3017,33 @@ function tryStealPuck(attacker, owner) {
     const dx = attacker.x - owner.x;
     const dy = attacker.y - owner.y;
     const dist2 = dx*dx + dy*dy;
-    const stealDist = owner.size/2 + attacker.size/2 + 2; 
+    
+    // Base Range (Body to Body)
+    let validRange = owner.size/2 + attacker.size/2 + 2; 
 
-    if (dist2 < stealDist * stealDist) {
+    // *** POKE CHECK BONUS ***
+    if (attacker.isPoking) {
+        validRange += 25; // Massive range boost
+    }
+
+    if (dist2 < validRange * validRange) {
         
-        // =========================================================
-        // *** THE FIX: ANGLE OF ATTACK ***
-        // =========================================================
-        
-        // 1. Calculate the vector from Owner -> Attacker
+        // --- ANGLE OF ATTACK ---
         const dist = Math.sqrt(dist2);
-        const nx = dx / dist; // Normalized direction to attacker
+        const nx = dx / dist; 
         const ny = dy / dist;
-
-        // 2. Get Owner's facing direction
         const ownerFaceX = Math.cos(owner.angle);
         const ownerFaceY = Math.sin(owner.angle);
-
-        // 3. Dot Product
-        // Result is 1.0 if attacker is directly IN FRONT
-        // Result is -1.0 if attacker is directly BEHIND
-        // Result is 0.0 if attacker is directly to the SIDE
         const alignment = (nx * ownerFaceX) + (ny * ownerFaceY);
 
-        // 4. The "Check Your Six" Rule
-        // If alignment is < 0, the attacker is behind the 90-degree plane of the carrier.
-        // We set a threshold of -0.3 (roughly 110 degrees back).
         if (alignment < -0.3) {
-            
-            // "Stick Lift" Logic: 
-            // Attempting to steal from behind is hard. 
-            // Let's give it only a 10% chance of success.
-            if (Math.random() > 0.10) {
-                return false; // Steal failed (bumped from behind but kept puck)
-            }
-            
-            // Optional: If you want to log it to verify it works
-            // console.log("Rare stick lift from behind!");
+            if (Math.random() > 0.10) return false; // Fail from behind
         }
-
-        // =========================================================
 
         // Successful Steal
         puck.ownerId = attacker.id;
         puck.vx = 0;
         puck.vy = 0;
-
         puckStealCooldown = 20; 
         return true;
     }
@@ -3098,7 +3079,6 @@ function resolvePlayerCollisions() {
                 // --- 1. MASS RATIOS (The Fix) ---
                 // Skaters = Mass 1.0
                 // Goalies = Mass 10.0 (Sturdy, but not infinite)
-                
                 const massA = (a.type === "goalie") ? 10.0 : 1.0;
                 const massB = (b.type === "goalie") ? 10.0 : 1.0;
                 const totalMass = massA + massB;
@@ -3126,7 +3106,6 @@ function resolvePlayerCollisions() {
                 const restitution = 0.9; 
                 const jImpulse = -(1 + restitution) * velAlongNormal;
                 
-                // Distribute the bounce energy properly
                 const impulseX = jImpulse * nx;
                 const impulseY = jImpulse * ny;
 
@@ -3137,7 +3116,6 @@ function resolvePlayerCollisions() {
                 b.vy += impulseY * bRatio;
 
                 // --- 4. IMPACT & STUN LOGIC ---
-                // (This section keeps your existing gameplay logic for stuns)
                 const impactForce = Math.abs(jImpulse);
                 if (impactForce > 1.50 && a.team !== b.team) {
                     let stunFrames = impactForce * 12;
@@ -3153,6 +3131,10 @@ function resolvePlayerCollisions() {
         }
     }
 }
+
+
+
+
 
 // Helper to apply stun and puck loss cleanly
 function applyStun(p, frames, force) {
@@ -3572,41 +3554,37 @@ function updateHumanSkater(p) {
     collideWithRink(p, p.size/2);
 
     // =========================================================
-    // 4. CONTROL LOGIC (Charge & Release)
+    // 4. CONTROL LOGIC (Charge & Release + POKE CHECK)
     // =========================================================
-    
-    // Config: Thresholds
-    const PASS_MAX_FRAMES = 25;  // 0-25 frames = Pass
-    const SHOT_MAX_FRAMES = 60;  // 26-60 frames = Shot Scaling
-
-    // Config: Power Output
-    const PASS_MIN_SPEED = 4.0;
-    const PASS_MAX_SPEED = 9.0;
-    const SHOT_MIN_POWER = 11.0;
-    const SHOT_MAX_POWER = 24.0; // Hardest possible shot
-
     if (typeof p.controlHoldTimer === 'undefined') p.controlHoldTimer = 0;
-
-    // Only allow input if we have the puck and stick
+    
+    // A. WE HAVE THE PUCK (Pass/Shoot)
     if (!p.stickDropped && puck.ownerId === p.id) {
-        
+        p.isPoking = false; // Cannot poke while holding puck
+
         if (keys.Control) {
             // --- CHARGING (Invisible) ---
             p.controlHoldTimer++;
-            // We do NOTHING visual here. Just counting.
         } 
         else {
             // --- RELEASED! EXECUTE ACTION ---
             if (p.controlHoldTimer > 0) {
-                
+                // Config: Thresholds
+                const PASS_MAX_FRAMES = 25;  
+                const SHOT_MAX_FRAMES = 60;  
+
+                // Config: Power Output
+                const PASS_MIN_SPEED = 4.0;
+                const PASS_MAX_SPEED = 9.0;
+                const SHOT_MIN_POWER = 11.0;
+                const SHOT_MAX_POWER = 24.0; 
+
                 // === ACTION A: PASS (Short Hold) ===
                 if (p.controlHoldTimer <= PASS_MAX_FRAMES) {
                     if (p.passCooldown <= 0) {
-                        // Calculate Pass Speed (0.0 to 1.0 based on hold time)
                         let pct = p.controlHoldTimer / PASS_MAX_FRAMES; 
                         let finalSpeed = PASS_MIN_SPEED + (pct * (PASS_MAX_SPEED - PASS_MIN_SPEED));
                         
-                        // Execute Directional Pass
                         puck.lastOwnerId = p.id;
                         ejectPuckFromOwner(p); 
                         puck.vx = Math.cos(p.angle) * finalSpeed;
@@ -3619,27 +3597,32 @@ function updateHumanSkater(p) {
                 // === ACTION B: SHOT (Long Hold) ===
                 else {
                     if (p.shootCooldown <= 0) {
-                        // Calculate Shot Power
                         let charge = (p.controlHoldTimer - PASS_MAX_FRAMES) / (SHOT_MAX_FRAMES - PASS_MAX_FRAMES);
-                        if (charge > 1.0) charge = 1.0; // Cap at max
+                        if (charge > 1.0) charge = 1.0; 
                         
-                        // Store calculated power for the animation to use
                         p.chargedShotPower = SHOT_MIN_POWER + (charge * (SHOT_MAX_POWER - SHOT_MIN_POWER));
-
-                        // START ANIMATION NOW
                         p.isShooting = true;
                         p.shotTick = 0;
                     }
                 }
-                
-                // Reset timer
                 p.controlHoldTimer = 0;
             }
         }
     } 
-    else {
-        // Lost puck? Reset timer
+    // B. DEFENSE (We don't have puck) -> POKE CHECK
+    else if (!p.stickDropped) {
         p.controlHoldTimer = 0;
+
+        if (keys.Control) {
+            p.isPoking = true; 
+        } else {
+            p.isPoking = false;
+        }
+    }
+    // C. NO STICK / ERROR
+    else {
+        p.controlHoldTimer = 0;
+        p.isPoking = false;
     }
 
     // =========================================================
@@ -3657,10 +3640,20 @@ function updateHumanSkater(p) {
     // =========================================================
     // 6. ANIMATION SYNC
     // =========================================================
-    // Only update pose if we are NOT shooting (normal skating/dribbling)
+    // Only update pose if we are NOT shooting
     if (!p.isShooting) {
         p.visualBodyAngle = p.angle;
+        
         let targetPose = { botX: 6.4, botY: 2.55, rot: 0, reach: 6.4 };
+
+        // *** POKE CHECK VISUALS ***
+        if (p.isPoking) {
+            targetPose.reach = 16.0; // Reach far forward
+            targetPose.botX = 12.0;  // Lean body forward
+            targetPose.botY = 0.5;   // Center the stick
+            targetPose.rot = 10;     // Slight shoulder turn
+        }
+
         p.pose.botX += (targetPose.botX - p.pose.botX) * 0.2;
         p.pose.botY += (targetPose.botY - p.pose.botY) * 0.2;
         p.pose.rot  += (targetPose.rot - p.pose.rot) * 0.1;
@@ -5044,6 +5037,9 @@ function checkPuckGoalieCollision(puck, g) {
 }
 
 
+
+
+
 function updateGoalie(p) {
     // 1. Decrement Save Cooldown
     if (p.saveCooldown > 0) p.saveCooldown--;
@@ -5097,22 +5093,18 @@ function updateGoalie(p) {
     let targetY = RY;
     
     if (puckInDefHalf) {
-        // Use Absolute Distance (The "Run Away" Fix)
         const distPuckToNet = Math.abs(puck.x - defendX);
         const distGoalieToNet = Math.abs(p.x - defendX);
 
         let ratio = distGoalieToNet / distPuckToNet;
         
-        // Safety Clamps
         if (ratio < 0) ratio = 0;
         if (ratio > 1.0) ratio = 1.0;
 
-        // Project the perfect angle
         targetY = RY + (puck.y - RY) * ratio;
     }
 
     // --- B. POST SAFETY CLAMP ---
-    // Stop 4px inside the post to prevent bank shots
     const goalieLane = (typeof NET_H !== 'undefined' ? NET_H / 2 : 22) - 4; 
     targetY = clamp(targetY, RY - goalieLane, RY + goalieLane);
 
@@ -5127,31 +5119,23 @@ function updateGoalie(p) {
 
 
     // --- D. ANGLE & DEPTH ---
-    
-    // 1. Calculate Angles
-    // *** DEFINED HERE so it exists for the depth logic ***
     const baseAngle = Math.atan2(p.y - defendY, p.x - defendX); 
     const puckAngle = Math.atan2(puck.y - p.y, puck.x - p.x);
     
-    // Smoothly turn head to face puck
     let diff = normalizeAngle(puckAngle - p.angle);
     diff = clamp(diff, -0.2, 0.2); 
     p.angle += diff;
 
-    // 2. Depth Calculation (Telescoping Logic)
+    // Depth Calculation
     const angleFromCenter = Math.abs(Math.sin(baseAngle)); 
     
-    // Step A: Max Aggression (40px center, 12px post)
     const maxDepth = 40 - (angleFromCenter * (40 - 12));
-
-    // Step B: Scale by Distance (Retreat if puck gets close)
     const distToPuck = Math.hypot(puck.x - p.x, puck.y - p.y);
     let retreatFactor = (distToPuck - 100) / 200; 
     
     if (retreatFactor < 0) retreatFactor = 0;
     if (retreatFactor > 1) retreatFactor = 1;
 
-    // Blend: 8px (Deep) <-> maxDepth (Aggressive)
     const desiredOffset = 8 + (retreatFactor * (maxDepth - 8));
     
     const idealX = defendX + (forwardDir * desiredOffset);
@@ -5159,7 +5143,27 @@ function updateGoalie(p) {
 
     // Physics
     collideWithRink(p, p.size / 2);
+
+    // --- SAFETY CLAMP ---
+    // If goalie escapes the rink (tunneling bug), put him back.
+    const MAX_X_BOUND = 1450;
+    const MAX_Y_BOUND = 650;
+    
+    if (Math.abs(p.x) > MAX_X_BOUND || Math.abs(p.y) > MAX_Y_BOUND) {
+        p.x = p.homeX;
+        p.y = p.homeY;
+        p.vx = 0; p.vy = 0;
+    }
+
+    // --- BEHIND-NET LOCK ---
+    // Prevent goalie from getting stuck behind the net.
+    if (p.team === 0) {
+        if (p.x < RINK_MIN_X + 25) { p.x = RINK_MIN_X + 25; p.vx = 0; }
+    } else {
+        if (p.x > RINK_MAX_X - 25) { p.x = RINK_MAX_X - 25; p.vx = 0; }
+    }
 }
+
 
 
 
