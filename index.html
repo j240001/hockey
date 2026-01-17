@@ -3092,72 +3092,62 @@ function resolvePlayerCollisions() {
 
             if (dist2 < minDist * minDist && dist2 > 0) {
                 const dist = Math.sqrt(dist2);
-                
-                // Normal Vector
                 const nx = dx / dist;
                 const ny = dy / dist;
 
-                // --- 1. POSITIONAL CORRECTION ---
-                const overlap = (minDist - dist) * 0.5;
-                a.x -= nx * overlap;
-                a.y -= ny * overlap;
-                b.x += nx * overlap;
-                b.y += ny * overlap;
+                // --- 1. MASS RATIOS (The Fix) ---
+                // Skaters = Mass 1.0
+                // Goalies = Mass 10.0 (Sturdy, but not infinite)
+                
+                const massA = (a.type === "goalie") ? 10.0 : 1.0;
+                const massB = (b.type === "goalie") ? 10.0 : 1.0;
+                const totalMass = massA + massB;
 
-                // --- 2. PHYSICS IMPULSE ---
+                // Calculate who moves how much
+                // Lighter object moves MORE. Heavier object moves LESS.
+                const aRatio = massB / totalMass; 
+                const bRatio = massA / totalMass; 
+
+                // --- 2. POSITIONAL CORRECTION ---
+                // Move them apart based on their mass ratio
+                const overlap = (minDist - dist);
+                a.x -= nx * overlap * aRatio;
+                a.y -= ny * overlap * aRatio;
+                b.x += nx * overlap * bRatio;
+                b.y += ny * overlap * bRatio;
+
+                // --- 3. PHYSICS IMPULSE ---
                 const rvx = b.vx - a.vx;
                 const rvy = b.vy - a.vy;
                 const velAlongNormal = rvx * nx + rvy * ny;
 
-                if (velAlongNormal > 0) continue; // Moving apart
+                if (velAlongNormal > 0) continue; 
 
                 const restitution = 0.9; 
-                let jImpulse = -(1 + restitution) * velAlongNormal;
-                jImpulse /= 2; 
-
+                const jImpulse = -(1 + restitution) * velAlongNormal;
+                
+                // Distribute the bounce energy properly
                 const impulseX = jImpulse * nx;
                 const impulseY = jImpulse * ny;
 
-                a.vx -= impulseX;
-                a.vy -= impulseY;
-                b.vx += impulseX;
-                b.vy += impulseY;
+                // Apply force (Heavy objects resist velocity change more)
+                a.vx -= impulseX * aRatio;
+                a.vy -= impulseY * aRatio;
+                b.vx += impulseX * bRatio;
+                b.vy += impulseY * bRatio;
 
-                // --- 3. IMPACT & STUN LOGIC ---
+                // --- 4. IMPACT & STUN LOGIC ---
+                // (This section keeps your existing gameplay logic for stuns)
                 const impactForce = Math.abs(jImpulse);
-                
-                // *** MODIFIED: Only trigger stuns if it's an OPPONENT collision ***
-                // We keep the force threshold at 1.50 for intentional hits.
                 if (impactForce > 1.50 && a.team !== b.team) {
-                    
-                    // A. CALCULATE DYNAMIC STUN
                     let stunFrames = impactForce * 12;
-                    
-                    // Clamp limits (Min 15, Max 90)
                     if (stunFrames < 15) stunFrames = 15;
                     if (stunFrames > 90) stunFrames = 90;
                     stunFrames = Math.floor(stunFrames);
 
-                    // B. DETERMINE "THE HAMMER"
-                    const vA = a.vx * nx + a.vy * ny;
-                    const vB = b.vx * (-nx) + b.vy * (-ny);
-
-                    let victim = null;
-                    if (vA > vB + 0.5) {
-                        victim = b; 
-                    } else if (vB > vA + 0.5) {
-                        victim = a; 
-                    } else {
-                        victim = "BOTH"; 
-                    }
-
-                    // C. APPLY CONSEQUENCES
-                    if (victim === "BOTH") {
-                        applyStun(a, stunFrames, impactForce);
-                        applyStun(b, stunFrames, impactForce);
-                    } else if (victim) {
-                        applyStun(victim, stunFrames, impactForce);
-                    }
+                    // Apply stun based on who took the brunt of the movement
+                    if (aRatio > 0.3) applyStun(a, stunFrames, impactForce);
+                    if (bRatio > 0.3) applyStun(b, stunFrames, impactForce);
                 }
             }
         }
@@ -8745,7 +8735,6 @@ window.addEventListener('keydown', () => {
 
 </body>
 </html>
-
 
 
 
