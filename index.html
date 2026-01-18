@@ -8742,14 +8742,16 @@ function setCrowdReplayMode(isReplay) {
     crowdLayers.forEach(id => {
         if (isReplay) {
             // Duck all layers down to 5%
-            // We use sound.volume(id) as start point to avoid 'pops'
-            sound.fade(sound.volume(id), 0.05, 300, id); 
+            // UPDATED: Use crowdDeck instead of sound
+            crowdDeck.fade(crowdDeck.volume(id), 0.05, 300, id); 
         } else {
             // Bring all layers back to 15% (Normal Volume)
-            sound.fade(sound.volume(id), 0.15, 1000, id);
+            // UPDATED: Use crowdDeck instead of sound
+            crowdDeck.fade(crowdDeck.volume(id), 0.15, 1000, id);
         }
     });
 }
+
 
 
 
@@ -8779,6 +8781,7 @@ window.addEventListener('keydown', () => {
 
 </body>
 </html>
+
 
 
 
