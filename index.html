@@ -348,14 +348,19 @@ function startCrowd() {
     if (!crowdEnabled) return; 
 
     // 2. STOP GHOSTS: If a crowd is already playing, kill it first
-    if (sound.playing(crowdId)) {
-        sound.stop(crowdId);
+    // UPDATED: Check crowdDeck, not sound
+    if (crowdDeck.playing(crowdId)) {
+        crowdDeck.stop(crowdId);
     }
 
     // 3. START FRESH
-    crowdId = sound.play('crowd_loop'); 
-    sound.loop(true, crowdId);
-    sound.volume(0.3, crowdId);
+    // UPDATED: Use crowdDeck and the correct sprite key ('crowd_bed')
+    crowdId = crowdDeck.play('crowd_bed'); 
+    crowdDeck.loop(true, crowdId);
+    
+    // Optional: Fade in for polish, or just set volume
+    crowdDeck.volume(0, crowdId); 
+    crowdDeck.fade(0, 0.3, 1000, crowdId);
 }
 
 
@@ -8549,47 +8554,80 @@ document.addEventListener("keydown", e => {
 });
 
 // =========================================================
-// AUDIO ENGINE (Howler.js Integration)
+// AUDIO DECKS (Split Channels)
 // =========================================================
-var sound = new Howl({
+
+// 1. SFX DECK (Pucks, whistles, horns - High Priority)
+const sfxDeck = new Howl({
     src: ['sprite.mp3'], 
     volume: 1.0,
     sprite: {
-        crowd_bed:  [0, 152737, true], 
         goal_horn:  [152737, 3105],
         puck_board: [155842, 668],
         shoot_puck: [156510, 337],
         referee_whistle: [156847, 620],
         puck_pad_save:  [157467, 533]
+        // Add skate sounds here later
     }
 });
 
-// Store all layer IDs so we can fade them together
+// 2. CROWD DECK (Ambient loops - Lower Priority, Duckable)
+const crowdDeck = new Howl({
+    src: ['sprite.mp3'], 
+    volume: 1.0,
+    sprite: {
+        crowd_bed:  [0, 152737, true] // true = loops by default
+        // Add chants/cheers here later
+    }
+});
+
+// 3. VOICE DECK (Announcer/Bob - Highest Priority)
+const voiceDeck = new Howl({
+    src: ['sprite.mp3'], // You will likely change this to 'voices.mp3' later
+    volume: 1.0,
+    sprite: {
+        // Placeholders for your future assets:
+        bob_intro: [0, 1000],
+        bob_goal_home: [0, 1000],
+        bob_goal_away: [0, 1000],
+        bob_save: [0, 1000],
+        bob_hit: [0, 1000]
+    }
+});
+
+// Helper to route sound names to the correct deck
+function getDeckForKey(key) {
+    if (sfxDeck._sprite[key]) return sfxDeck;
+    if (crowdDeck._sprite[key]) return crowdDeck;
+    if (voiceDeck._sprite[key]) return voiceDeck;
+    return sfxDeck; // Fallback
+}
+
+
+// Store all layer IDs
 let crowdLayers = [];
 
 function initAudio() {
-    // Only initialize if we haven't already
     if (crowdLayers.length > 0) return;
 
-    // --- LAYER 1: The Foundation (Starts at 0s) ---
-    let id1 = sound.play('crowd_bed');
-    sound.seek(0, id1);
-    sound.volume(0, id1);           // Start silent
+    // Layer 1 (Foundation)
+    let id1 = crowdDeck.play('crowd_bed');
+    crowdDeck.seek(0, id1);
+    crowdDeck.volume(0, id1);
     crowdLayers.push(id1);
 
-    // --- LAYER 2: The Widener (Starts at 7s) ---
-    // Offsetting the start time prevents "flanging" (robotic sound)
-    let id2 = sound.play('crowd_bed');
-    sound.seek(7.0, id2);           // Jump 7 seconds into the loop
-    sound.rate(1.01, id2);          // 1% faster (prevents loops from syncing up)
-    sound.volume(0, id2);
+    // Layer 2 (Widener)
+    let id2 = crowdDeck.play('crowd_bed');
+    crowdDeck.seek(7.0, id2);
+    crowdDeck.rate(1.01, id2);
+    crowdDeck.volume(0, id2);
     crowdLayers.push(id2);
 
-    // --- LAYER 3: The Texture (Starts at 15s) ---
-    let id3 = sound.play('crowd_bed');
-    sound.seek(15.0, id3);          // Jump 15 seconds into the loop
-    sound.rate(0.99, id3);          // 1% slower (adds bass/depth)
-    sound.volume(0, id3);
+    // Layer 3 (Texture)
+    let id3 = crowdDeck.play('crowd_bed');
+    crowdDeck.seek(15.0, id3);
+    crowdDeck.rate(0.99, id3);
+    crowdDeck.volume(0, id3);
     crowdLayers.push(id3);
 }
 
@@ -8600,43 +8638,27 @@ function initAudio() {
 let currentAmbienceState = 'off'; 
 
 function updateCrowdAmbience() {
-    // 1. MASTER OVERRIDE: If the user muted the crowd, force silence.
     if (!crowdEnabled) {
         if (currentAmbienceState === 'on') {
             currentAmbienceState = 'off';
-            // Fade out everything
-            crowdLayers.forEach(id => sound.fade(sound.volume(id), 0, 1000, id));
+            crowdLayers.forEach(id => crowdDeck.fade(crowdDeck.volume(id), 0, 1000, id));
         }
         return; 
     }
 
-    // 2. Normal Logic (Only runs if crowdEnabled is TRUE)
     let shouldHear = false;
-
-    // A. Normal Gameplay
     if (gameState === 'playing') shouldHear = true;
-    
-    // B. Playoffs (Only if watching)
-    if (gameState === 'playoffs' && typeof Playoffs !== 'undefined' && Playoffs.watchMode) {
-        shouldHear = true;
-    }
-    
-    // C. Tournament (Only if watching)
-    if (gameState === 'tournament' && typeof Tournament !== 'undefined' && Tournament.watchMode) {
-        shouldHear = true;
-    }
-    
-    // D. Training (Only if watching)
+    if (gameState === 'playoffs' && typeof Playoffs !== 'undefined' && Playoffs.watchMode) shouldHear = true;
+    if (gameState === 'tournament' && typeof Tournament !== 'undefined' && Tournament.watchMode) shouldHear = true;
     if (TRAINING_MODE && WATCH_MODE) shouldHear = true;
 
-    // --- EXECUTE FADES ---
     if (shouldHear && currentAmbienceState === 'off') {
         currentAmbienceState = 'on';
-        crowdLayers.forEach(id => sound.fade(0, 0.15, 2000, id));
+        crowdLayers.forEach(id => crowdDeck.fade(0, 0.15, 2000, id));
     } 
     else if (!shouldHear && currentAmbienceState === 'on') {
         currentAmbienceState = 'off';
-        crowdLayers.forEach(id => sound.fade(sound.volume(id), 0, 1000, id));
+        crowdLayers.forEach(id => crowdDeck.fade(crowdDeck.volume(id), 0, 1000, id));
     }
 }
 
@@ -8645,20 +8667,18 @@ function toggleCrowd() {
     crowdEnabled = !crowdEnabled;
 
     if (crowdEnabled) {
-        // TURN ON: Fade from 0 to 0.3 over 1 second
-        if (!sound.playing(crowdId)) {
-             crowdId = sound.play('crowd_loop');
-             sound.loop(true, crowdId);
+        // Turn On
+        if (!crowdDeck.playing(crowdId)) {
+             crowdId = crowdDeck.play('crowd_bed'); // Note: 'crowd_loop' was likely a typo in your old code, assumed 'crowd_bed'
+             crowdDeck.loop(true, crowdId);
         }
-        sound.fade(0, 0.3, 1000, crowdId);
+        crowdDeck.fade(0, 0.3, 1000, crowdId);
         console.log("Crowd ON");
     } else {
-        // TURN OFF: Fade from current vol to 0, then stop
-        // We fade out first, then stop it to save CPU
-        sound.fade(sound.volume(crowdId), 0, 1000, crowdId);
-        
+        // Turn Off
+        crowdDeck.fade(crowdDeck.volume(crowdId), 0, 1000, crowdId);
         setTimeout(() => {
-            if (!crowdEnabled) sound.stop(crowdId);
+            if (!crowdEnabled) crowdDeck.stop(crowdId);
         }, 1000);
         console.log("Crowd OFF");
     }
@@ -8687,29 +8707,30 @@ const SOUND_COOLDOWNS = {
 const lastSoundTime = {};
 
 function playGameSound(name, volumeOverride) {
-    // 1. GAME MODE CHECKS (Silence sounds during fast-forward sim)
+    // 1. GAME MODE CHECKS
     if (TRAINING_MODE && !WATCH_MODE) return; 
     if (gameState === 'tournament' && typeof Tournament !== 'undefined' && !Tournament.watchMode) return;
     if (gameState === 'playoffs' && typeof Playoffs !== 'undefined' && !Playoffs.watchMode) return;
 
     // 2. COOLDOWN CHECK
     const now = performance.now();
-    
-    // Default to 50ms protection if not listed in config
     const cooldown = SOUND_COOLDOWNS[name] || 50; 
     const last = lastSoundTime[name] || 0;
-
-    // If too soon, BLOCK the sound
     if (now - last < cooldown) return; 
 
-    // 3. PLAY THE SOUND
-    lastSoundTime[name] = now; // Update timestamp
-    var id = sound.play(name);
+    // 3. ROUTE TO DECK
+    const deck = getDeckForKey(name);
     
-    // 4. APPLY VOLUME
+    // 4. PLAY
+    lastSoundTime[name] = now;
+    var id = deck.play(name);
+    
+    // 5. APPLY VOLUME
     if (volumeOverride !== undefined) {
-        sound.volume(volumeOverride, id);
+        deck.volume(volumeOverride, id);
     }
+    
+    return id; // Return ID in case we need to track it (like for loop stopping)
 }
 
 
@@ -8758,7 +8779,6 @@ window.addEventListener('keydown', () => {
 
 </body>
 </html>
-
 
 
 
