@@ -6086,8 +6086,10 @@ function resetAfterGoal(scoringTeam) {
             // TEAM 0 SCORING (VISITOR) -> POLITE APPLAUSE
             else {
                 playGameSound('referee_whistle', 0.6);
-                let cheerId = crowdDeck.play('crowd_cheer');
-                crowdDeck.volume(0.4, cheerId); 
+                if (crowdEnabled) {
+                    let cheerId = crowdDeck.play('crowd_cheer');
+                    crowdDeck.volume(0.4, cheerId); 
+                }
             }
         }
 
@@ -8956,6 +8958,7 @@ window.addEventListener('keydown', () => {
 
 </body>
 </html>
+
 
 
 
