@@ -8198,6 +8198,8 @@ function loop(now) {
 
         puck.update();
 
+        checkCrowdAnticipation();
+
         updateDroppedSticks(); // <--- NEW
 
         checkOffsides();
@@ -8669,6 +8671,7 @@ let currentAmbienceState = 'off';
 // Global target for smooth fading
 let crowdTargetVol = 0.0; 
 let currentCrowdVol = 0.0;
+let crowdGaspCooldown = 0;
 
 function updateCrowdAmbience() {
     // 1. MASTER SWITCH: If crowd is disabled, kill volume and exit
@@ -8762,6 +8765,43 @@ function toggleCrowd() {
         console.log("Crowd OFF");
     }
 }
+
+
+function checkCrowdAnticipation() {
+    // 1. Decrement Cooldown
+    if (crowdGaspCooldown > 0) {
+        crowdGaspCooldown--;
+        return;
+    }
+
+    // 2. RULES: Puck must be LOOSE
+    if (puck.ownerId !== null) return;
+
+    // 3. TARGET: The Visitor Goalie (Team 0)
+    // The Home Crowd (Team 1) gasps when the puck is near the OPPONENT's net.
+    // (Note: We optimize by assuming Visitor Goalie is roughly at their home post)
+    // Team 0 defends Goal 1 usually, but let's find the actual player to be safe.
+    const visitorGoalie = players.find(p => p.team === 0 && p.type === "goalie");
+    if (!visitorGoalie) return;
+
+    // 4. DISTANCE CHECK
+    const dist = Math.hypot(puck.x - visitorGoalie.x, puck.y - visitorGoalie.y);
+
+    // 5. TRIGGER
+    // 65px covers the crease + a bit of the slot
+    if (dist < 65) {
+        // Play the gasp
+        const id = crowdDeck.play('crowd_ohhh');
+        
+        // Randomize volume slightly for variety (0.6 to 0.8)
+        // We don't want it AS loud as a missed shot against the boards
+        crowdDeck.volume(0.6 + Math.random() * 0.2, id);
+
+        // Set cooldown (3 seconds)
+        crowdGaspCooldown = 180;
+    }
+}
+
 
 
 // =========================================================
