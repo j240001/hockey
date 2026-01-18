@@ -1859,7 +1859,7 @@ function collideCircleWithRink(obj, radius, restitution = 0.8) {
             if (obj === puck) {
                 const impactIntensity = Math.abs(dot); 
                 
-                if (impactIntensity > 1.0) { 
+                if (impactIntensity > 1.0 && isAudioEnabled()) {
                     let vol = Math.min(0.3, impactIntensity * 0.21); 
                     playGameSound('puck_board', vol);
 
