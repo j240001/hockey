@@ -8784,6 +8784,7 @@ function checkCrowdAnticipation() {
 
     if (!isAudioEnabled()) return;
 
+    if (isResetActive()) return;
 
     // 1. Decrement Cooldown
     if (crowdGaspCooldown > 0) {
