@@ -8710,7 +8710,7 @@ function updateCrowdAmbience() {
 
         // A. HOME TEAM ATTACKING (Loud Swell)
         if (isHomeOffense) {
-            target = 0.60; // Swell up!
+            target = 0.40; // Swell up!
             
             // Super Swell: If Home Team actually HAS the puck in the zone
             if (puck.ownerId !== null) {
@@ -8795,7 +8795,7 @@ function checkCrowdAnticipation() {
         
         // Randomize volume slightly for variety (0.6 to 0.8)
         // We don't want it AS loud as a missed shot against the boards
-        crowdDeck.volume(0.6 + Math.random() * 0.2, id);
+        crowdDeck.volume(0.3 + Math.random() * 0.2, id);
 
         // Set cooldown (1 second)
         crowdGaspCooldown = 60;
