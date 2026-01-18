@@ -8052,6 +8052,8 @@ function loop(now) {
     // 1. GLOBAL UPDATES
     updateLivingCrowd(); 
 
+    checkCrowdAnticipation();
+
     const isStoppage = isResetActive() || performance.now() < faceoffPauseUntil;
     if (isStoppage && !isGoalCelebrationActive()) {
         calculateExodus();
@@ -8198,7 +8200,7 @@ function loop(now) {
 
         puck.update();
 
-        checkCrowdAnticipation();
+        
 
         updateDroppedSticks(); // <--- NEW
 
@@ -8781,8 +8783,8 @@ function toggleCrowd() {
 function checkCrowdAnticipation() {
 
     if (!isAudioEnabled()) return;
-    
-    
+
+
     // 1. Decrement Cooldown
     if (crowdGaspCooldown > 0) {
         crowdGaspCooldown--;
