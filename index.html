@@ -1856,11 +1856,17 @@ function collideCircleWithRink(obj, radius, restitution = 0.8) {
             // +++ AUDIO TRIGGER +++ 
             // Only play if it's the puck AND it hit hard enough
             if (obj === puck) {
-                const impactIntensity = Math.abs(dot); // <--- THIS IS THE MAGIC VARIABLE
+                const impactIntensity = Math.abs(dot); 
                 
                 if (impactIntensity > 1.0) { 
                     let vol = Math.min(0.3, impactIntensity * 0.12); 
                     playGameSound('puck_board', vol);
+
+                    // *** NEW: CHANCE FOR CROWD REACTION ***
+                    // If it hits REALLY hard (missed shot), 30% chance to gasp
+                    if (impactIntensity > 4.0 && Math.random() < 0.3) {
+                         crowdDeck.play('crowd_ohhh');
+                    }
                 }
             }
             // +++ END AUDIO +++
@@ -6056,6 +6062,8 @@ function resetAfterGoal(scoringTeam) {
 
         playGameSound('referee_whistle', 0.6);
 
+        crowdDeck.play('crowd_cheer');
+
         lastGoalScorerId = puck.lastOwnerId || null;
         
         // **FIX**: The TRAIN_TOTAL_GOALS++ was executed twice before; removed redundancy.
@@ -8785,7 +8793,6 @@ window.addEventListener('keydown', () => {
 
 </body>
 </html>
-
 
 
 
