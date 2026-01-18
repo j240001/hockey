@@ -8786,6 +8786,12 @@ function checkCrowdAnticipation() {
 
     if (isResetActive()) return;
 
+    if (lastGoalTeam !== null) return; 
+ 
+    if (typeof isReplaying !== 'undefined' && isReplaying) return;
+    if (typeof isPaused !== 'undefined' && isPaused) return;
+
+
     // 1. Decrement Cooldown
     if (crowdGaspCooldown > 0) {
         crowdGaspCooldown--;
