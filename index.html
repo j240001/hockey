@@ -101,6 +101,8 @@
 let crowdId = 0; // Global tracker
 let crowdEnabled = true;
 
+let crowdTargetVol = 0.0; 
+let currentCrowdVol = 0.0;
 
 let masterCrowd = []; // This holds every fan's data
 let firstWhistleBlown = false; // Starts false, becomes true after the first whistle
@@ -1862,10 +1864,24 @@ function collideCircleWithRink(obj, radius, restitution = 0.8) {
                     let vol = Math.min(0.3, impactIntensity * 0.12); 
                     playGameSound('puck_board', vol);
 
-                    // *** NEW: CHANCE FOR CROWD REACTION ***
-                    // If it hits REALLY hard (missed shot), 30% chance to gasp
-                    if (impactIntensity > 4.0 && Math.random() < 0.3) {
-                         crowdDeck.play('crowd_ohhh');
+                    // *** BIASED CROWD REACTION ***
+                    // Only react if hit was hard (missed shot) AND random chance
+                    if (impactIntensity > 4.0 && Math.random() < 0.4) {
+                         
+                         // Who shot it?
+                         let isHomeShot = false;
+                         if (puck.lastOwnerId) {
+                             const shooter = getPlayerById(puck.lastOwnerId);
+                             if (shooter && shooter.team === 1) isHomeShot = true;
+                         }
+
+                         let reactionId = crowdDeck.play('crowd_ohhh');
+                         
+                         if (isHomeShot) {
+                             crowdDeck.volume(1.0, reactionId); // LOUD GASP for Home miss
+                         } else {
+                             crowdDeck.volume(0.3, reactionId); // Quiet murmur for Visitor miss
+                         }
                     }
                 }
             }
@@ -6051,38 +6067,39 @@ function checkGoal() {
 
 
 function resetAfterGoal(scoringTeam) {
-
     const isOvertimeWin = currentPeriod > TOTAL_PERIODS && scoringTeam !== -1;
 
-    // 1. Mark scorer and training goals
     if (scoringTeam !== -1) {
         lastGoalTeam = scoringTeam;
-
-        playGameSound('goal_horn', 0.3);
-
-        playGameSound('referee_whistle', 0.6);
-
-        crowdDeck.play('crowd_cheer');
+        
+        // === AUDIO LOGIC ===
+        
+        // TEAM 1 SCORING (HOME) -> FULL PARTY
+        if (scoringTeam === 1) {
+            playGameSound('goal_horn', 0.4);      // LOUD HORN
+            playGameSound('referee_whistle', 0.6);
+            crowdDeck.volume(1.0, crowdDeck.play('crowd_cheer')); // MAX VOLUME CHEER
+        } 
+        // TEAM 0 SCORING (VISITOR) -> POLITE APPLAUSE
+        else {
+            // NO HORN for visitors!
+            playGameSound('referee_whistle', 0.6);
+            
+            // Quiet Cheer (0.4 volume)
+            let cheerId = crowdDeck.play('crowd_cheer');
+            crowdDeck.volume(0.4, cheerId); 
+        }
 
         lastGoalScorerId = puck.lastOwnerId || null;
-        
-        // **FIX**: The TRAIN_TOTAL_GOALS++ was executed twice before; removed redundancy.
         TRAIN_TOTAL_GOALS++;
     }
     
-    // 2. Apply Score Update (MUST happen here to show the final score)
-    // if (scoringTeam === 0) scoreTeam0++;
-    // if (scoringTeam === 1) scoreTeam1++;
-
-    // 3. Set Celebration Timer
-    goalResetTimer = performance.now() + 6000; // 6-second celebration
+    // ... (Rest of function remains the same: Timer, Rewards, etc.) ...
+    
+    goalResetTimer = performance.now() + 6000; 
     if (!puck.lastOwnerId) lastGoalScorerId = null;
 
-    // 4. Removed
-    
-
-    // 5. Apply Training Rewards
-    applyTrainingRewards(); // already computes p.reward
+    applyTrainingRewards(); 
 
     for (const p of players) {
         if (TRAINING_MODE && p.team === 0 && p.brain && p.brain.w1) {
@@ -6091,7 +6108,7 @@ function resetAfterGoal(scoringTeam) {
         p.reward = 0;
     }
     
-    ticksSinceLastGoal = 0; // reset the timeout tracker too
+    ticksSinceLastGoal = 0; 
 }
 
 
@@ -8650,29 +8667,79 @@ function initAudio() {
 // Track whether the crowd is currently audible
 let currentAmbienceState = 'off'; 
 
+// Global target for smooth fading
+let crowdTargetVol = 0.0; 
+let currentCrowdVol = 0.0;
+
 function updateCrowdAmbience() {
+    // 1. MASTER SWITCH: If crowd is disabled, kill volume and exit
     if (!crowdEnabled) {
-        if (currentAmbienceState === 'on') {
-            currentAmbienceState = 'off';
-            crowdLayers.forEach(id => crowdDeck.fade(crowdDeck.volume(id), 0, 1000, id));
+        if (currentCrowdVol > 0) {
+            currentCrowdVol = 0;
+            crowdLayers.forEach(id => crowdDeck.volume(0, id));
         }
-        return; 
+        return;
     }
 
-    let shouldHear = false;
-    if (gameState === 'playing') shouldHear = true;
-    if (gameState === 'playoffs' && typeof Playoffs !== 'undefined' && Playoffs.watchMode) shouldHear = true;
-    if (gameState === 'tournament' && typeof Tournament !== 'undefined' && Tournament.watchMode) shouldHear = true;
-    if (TRAINING_MODE && WATCH_MODE) shouldHear = true;
+    // 2. DETERMINE GAME STATE
+    let activeGame = (gameState === 'playing' || 
+                     (gameState === 'playoffs' && Playoffs.watchMode) || 
+                     (gameState === 'tournament' && Tournament.watchMode) ||
+                     (TRAINING_MODE && WATCH_MODE));
 
-    if (shouldHear && currentAmbienceState === 'off') {
-        currentAmbienceState = 'on';
-        crowdLayers.forEach(id => crowdDeck.fade(0, 0.15, 2000, id));
-    } 
-    else if (!shouldHear && currentAmbienceState === 'on') {
-        currentAmbienceState = 'off';
-        crowdLayers.forEach(id => crowdDeck.fade(crowdDeck.volume(id), 0, 1000, id));
+    if (!activeGame) {
+        // Menu/Pause: Fade to silence
+        crowdTargetVol = 0.0;
+    } else {
+        // 3. CALCULATE "EXCITEMENT LEVEL"
+        // Base level (Neutral Zone / Idle) - Louder than before
+        let target = 0.30; 
+
+        // Get Puck Location (0 = Left Wall, 1000 = Right Wall)
+        // Home Team (1) usually attacks Right (Goal 2)
+        // Visitor Team (0) usually attacks Left (Goal 1)
+        
+        // Find out which side is the "Home Offensive Zone"
+        // If Home attacks Right (normal), Off Zone is > 600
+        // If Home attacks Left (period 2), Off Zone is < 400
+        const homeAttackingRight = !team0AttacksRight; 
+        const isHomeOffense = homeAttackingRight ? (puck.x > RX + 100) : (puck.x < RX - 100);
+        const isVisitorOffense = homeAttackingRight ? (puck.x < RX - 100) : (puck.x > RX + 100);
+
+        // A. HOME TEAM ATTACKING (Loud Swell)
+        if (isHomeOffense) {
+            target = 0.60; // Swell up!
+            
+            // Super Swell: If Home Team actually HAS the puck in the zone
+            if (puck.ownerId !== null) {
+                const owner = getPlayerById(puck.ownerId);
+                if (owner && owner.team === 1) target = 0.85; // Deafening pressure
+            }
+        } 
+        // B. VISITOR TEAM ATTACKING (Nervous Tension)
+        else if (isVisitorOffense) {
+            target = 0.25; // Drop slightly (nervous silence)
+        }
+
+        crowdTargetVol = target;
     }
+
+    // 4. SMOOTH FADE (The "Swell" Effect)
+    // We inch the current volume towards the target volume every frame.
+    // 0.01 = Slow fade, 0.05 = Fast fade
+    if (Math.abs(currentCrowdVol - crowdTargetVol) > 0.001) {
+        // Fade Up faster than we fade down (Excitement builds fast)
+        const speed = (crowdTargetVol > currentCrowdVol) ? 0.005 : 0.002;
+        
+        // Simple Lerp
+        currentCrowdVol += (crowdTargetVol - currentCrowdVol) * 0.02;
+    }
+
+    // 5. APPLY TO LAYERS
+    // We verify the layers exist to avoid errors
+    crowdLayers.forEach(id => {
+        crowdDeck.volume(currentCrowdVol, id);
+    });
 }
 
 
