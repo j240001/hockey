@@ -1860,7 +1860,7 @@ function collideCircleWithRink(obj, radius, restitution = 0.8) {
                 const impactIntensity = Math.abs(dot); 
                 
                 if (impactIntensity > 1.0) { 
-                    let vol = Math.min(0.3, impactIntensity * 0.12); 
+                    let vol = Math.min(0.3, impactIntensity * 0.21); 
                     playGameSound('puck_board', vol);
 
                     // *** BIASED CROWD REACTION ***
@@ -2234,7 +2234,7 @@ function whistle(reason, durationMs = 2000) {
     if (isResetActive()) return; 
 
     // +++ AUDIO TRIGGER +++
-    playGameSound('referee_whistle', 0.5);
+    playGameSound('referee_whistle', 0.7);
 
     // Reset current state variables that conflict with the whistle.
     const owner = getPlayerById(puck.ownerId);
@@ -2785,7 +2785,7 @@ function tryPickupPuck(p) {
             puck.isShot = false; 
             
             // +++ AUDIO: Deflection "Tick" +++
-            playGameSound('shoot_puck', 0.2); 
+            playGameSound('shoot_puck', 0.3); 
             return; 
         }
 
@@ -2805,7 +2805,7 @@ function tryPickupPuck(p) {
                 puck.vx = 0; puck.vy = 0;
                 
                 // +++ AUDIO: Crisp Catch +++
-                playGameSound('shoot_puck', 0.3);
+                playGameSound('shoot_puck', 0.4);
                 return;
             } 
         }
@@ -2817,7 +2817,7 @@ function tryPickupPuck(p) {
                 puck.vx = 0; puck.vy = 0;
                 
                 // +++ AUDIO: Hard Interception +++
-                playGameSound('shoot_puck', 0.3);
+                playGameSound('shoot_puck', 0.4);
                 return;
             }
         }
@@ -2844,7 +2844,7 @@ function tryPickupPuck(p) {
         puck.y = p.y + ny * (interactDist + 2);
         
         // +++ AUDIO: Fumble/Bobble +++
-        playGameSound('puck_board', 0.2); // Dull thud for a miss
+        playGameSound('shoot_puck', 0.2); // Dull thud for a miss
     }
 }
 
@@ -2945,7 +2945,7 @@ function shootPuck(player, power, targetOverride) {
     player.shootCooldown = 35;
     puck.lastOwnerId = player.id;
     ejectPuckFromOwner(player);
-    playGameSound('shoot_puck', 0.7);
+    playGameSound('shoot_puck', 0.8);
 
     // Aim strictly from Blade to Target
     const finalAngle = Math.atan2(targetY - launchY, targetX - launchX);
@@ -5049,7 +5049,7 @@ function checkPuckGoalieCollision(puck, g) {
         puck.y += wy * (hit.pen + 0.5);
 
         if (Math.abs(dot) > 2.0) {
-            playGameSound('puck_pad_save', 0.2);
+            playGameSound('puck_pad_save', 0.4);
         }
 
         return true;
@@ -6076,13 +6076,13 @@ function resetAfterGoal(scoringTeam) {
         // TEAM 1 SCORING (HOME) -> FULL PARTY
         if (scoringTeam === 1) {
             playGameSound('goal_horn', 0.4);      // LOUD HORN
-            playGameSound('referee_whistle', 0.6);
+            playGameSound('referee_whistle', 0.8);
             crowdDeck.volume(1.0, crowdDeck.play('crowd_cheer')); // MAX VOLUME CHEER
         } 
         // TEAM 0 SCORING (VISITOR) -> POLITE APPLAUSE
         else {
             // NO HORN for visitors!
-            playGameSound('referee_whistle', 0.6);
+            playGameSound('referee_whistle', 0.8);
             
             // Quiet Cheer (0.4 volume)
             let cheerId = crowdDeck.play('crowd_cheer');
@@ -8797,8 +8797,8 @@ function checkCrowdAnticipation() {
         // We don't want it AS loud as a missed shot against the boards
         crowdDeck.volume(0.6 + Math.random() * 0.2, id);
 
-        // Set cooldown (3 seconds)
-        crowdGaspCooldown = 180;
+        // Set cooldown (1 second)
+        crowdGaspCooldown = 60;
     }
 }
 
