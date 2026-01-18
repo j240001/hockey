@@ -6073,20 +6073,20 @@ function resetAfterGoal(scoringTeam) {
         
         // === AUDIO LOGIC ===
         
-        // TEAM 1 SCORING (HOME) -> FULL PARTY
-        if (scoringTeam === 1) {
-            playGameSound('goal_horn', 0.4);      // LOUD HORN
-            playGameSound('referee_whistle', 0.8);
-            crowdDeck.volume(1.0, crowdDeck.play('crowd_cheer')); // MAX VOLUME CHEER
-        } 
-        // TEAM 0 SCORING (VISITOR) -> POLITE APPLAUSE
-        else {
-            // NO HORN for visitors!
-            playGameSound('referee_whistle', 0.8);
+        if (isAudioEnabled()) {
             
-            // Quiet Cheer (0.4 volume)
-            let cheerId = crowdDeck.play('crowd_cheer');
-            crowdDeck.volume(0.4, cheerId); 
+            // TEAM 1 SCORING (HOME) -> FULL PARTY
+            if (scoringTeam === 1) {
+                playGameSound('goal_horn', 0.4);      
+                playGameSound('referee_whistle', 0.6);
+                crowdDeck.volume(1.0, crowdDeck.play('crowd_cheer')); 
+            } 
+            // TEAM 0 SCORING (VISITOR) -> POLITE APPLAUSE
+            else {
+                playGameSound('referee_whistle', 0.6);
+                let cheerId = crowdDeck.play('crowd_cheer');
+                crowdDeck.volume(0.4, cheerId); 
+            }
         }
 
         lastGoalScorerId = puck.lastOwnerId || null;
@@ -8674,6 +8674,17 @@ let currentCrowdVol = 0.0;
 let crowdGaspCooldown = 0;
 
 function updateCrowdAmbience() {
+    // *** FIX: SHUT UP IF SIMULATING ***
+    if (!isAudioEnabled()) {
+        if (currentCrowdVol > 0) {
+            currentCrowdVol = 0;
+            crowdLayers.forEach(id => crowdDeck.volume(0, id));
+        }
+        return;
+    }
+
+
+
     // 1. MASTER SWITCH: If crowd is disabled, kill volume and exit
     if (!crowdEnabled) {
         if (currentCrowdVol > 0) {
@@ -8768,6 +8779,10 @@ function toggleCrowd() {
 
 
 function checkCrowdAnticipation() {
+
+    if (!isAudioEnabled()) return;
+    
+    
     // 1. Decrement Cooldown
     if (crowdGaspCooldown > 0) {
         crowdGaspCooldown--;
@@ -8822,8 +8837,35 @@ const SOUND_COOLDOWNS = {
     'bob_goal': 5000
 };
 
+
+function isAudioEnabled() {
+    // 1. Regular Game
+    if (gameState === 'playing') return true;
+    
+    // 2. Training Mode
+    if (TRAINING_MODE) return WATCH_MODE;
+    
+    // 3. Tournament Mode (The one you need fixed)
+    if (gameState === 'tournament' && typeof Tournament !== 'undefined') {
+        return Tournament.watchMode;
+    }
+    
+    // 4. Playoff Mode
+    if (gameState === 'playoffs' && typeof Playoffs !== 'undefined') {
+        return Playoffs.watchMode;
+    }
+
+    return false;
+}
+
+
+
+
+
 // State tracker
 const lastSoundTime = {};
+
+
 
 function playGameSound(name, volumeOverride) {
     // 1. GAME MODE CHECKS
