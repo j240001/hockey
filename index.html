@@ -8571,11 +8571,18 @@ const sfxDeck = new Howl({
 
 // 2. CROWD DECK (Ambient loops - Lower Priority, Duckable)
 const crowdDeck = new Howl({
-    src: ['sprite.mp3'], 
+    src: ['crowd_sprite.mp3'], 
     volume: 1.0,
     sprite: {
-        crowd_bed:  [0, 152737, true] // true = loops by default
-        // Add chants/cheers here later
+        // 1. THE BED (0s to 20s)
+        // Must match your clip length exactly for the loop to be seamless
+        crowd_bed:  [0, 18983, true], 
+
+        // 2. THE OHHH (Starts after bed, e.g., at 21s)
+        crowd_ohhh: [18983, 4545], 
+
+        // 3. THE GOAL (Starts after Ohhh, e.g., at 24s)
+        crowd_cheer: [23528, 6886] 
     }
 });
 
@@ -8778,6 +8785,7 @@ window.addEventListener('keydown', () => {
 
 </body>
 </html>
+
 
 
 
