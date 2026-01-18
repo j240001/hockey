@@ -3558,16 +3558,13 @@ function updateHumanSkater(p) {
 
         if (keys.Control) {
             // *** LOCKOUT CHECK ***
-            // If we are "locked out", it means we obtained the puck while 
-            // the button was ALREADY held down (e.g. from a poke check).
-            // We must wait for release before charging starts.
             if (!p.controlLockout) {
                 p.controlHoldTimer++;
             }
         } 
         else {
             // RELEASED!
-            p.controlLockout = false; // Reset the safety latch
+            p.controlLockout = false; 
 
             if (p.controlHoldTimer > 0) {
                 // Config: Thresholds
@@ -3590,7 +3587,11 @@ function updateHumanSkater(p) {
                         ejectPuckFromOwner(p); 
                         puck.vx = Math.cos(p.angle) * finalSpeed;
                         puck.vy = Math.sin(p.angle) * finalSpeed;
-                        puck.pickupImmunityUntil = performance.now() + 500; 
+                        
+                        // *** FIX IS HERE ***
+                        // Use FRAMES, not TIME, so it works with the new Physics Engine
+                        puck.pickupImmunityFrames = 30; 
+                        
                         puck.isShot = false; 
                         p.passCooldown = 30;
                     }
@@ -3617,8 +3618,6 @@ function updateHumanSkater(p) {
         if (keys.Control) {
             p.isPoking = true; 
             // *** SET LOCKOUT ***
-            // Mark this button press as "Used for Poking". 
-            // If we steal the puck right now, the 'A' block above won't fire.
             p.controlLockout = true; 
         } else {
             p.isPoking = false;
@@ -3681,7 +3680,6 @@ function updateHumanSkater(p) {
         puck.vx = p.vx; puck.vy = p.vy;
     }
 }
-
 
 
 function performDirectionalPass(p) {
@@ -8754,7 +8752,6 @@ function setCrowdReplayMode(isReplay) {
 
 
 
-
 // Initialize audio on first user interaction
 window.addEventListener('click', () => {
     if (Howler.ctx.state === 'suspended') Howler.ctx.resume();
@@ -8781,7 +8778,6 @@ window.addEventListener('keydown', () => {
 
 </body>
 </html>
-
 
 
 
