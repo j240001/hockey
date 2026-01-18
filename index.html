@@ -1865,7 +1865,7 @@ function collideCircleWithRink(obj, radius, restitution = 0.8) {
 
                     // *** BIASED CROWD REACTION ***
                     // Only react if hit was hard (missed shot) AND random chance
-                    if (impactIntensity > 4.0 && Math.random() < 0.4) {
+                    if (crowdEnabled && impactIntensity > 4.0 && Math.random() < 0.4) {
                          
                          // Who shot it?
                          let isHomeShot = false;
@@ -6079,7 +6079,9 @@ function resetAfterGoal(scoringTeam) {
             if (scoringTeam === 1) {
                 playGameSound('goal_horn', 0.4);      
                 playGameSound('referee_whistle', 0.6);
-                crowdDeck.volume(1.0, crowdDeck.play('crowd_cheer')); 
+                if (crowdEnabled) {
+                    crowdDeck.volume(1.0, crowdDeck.play('crowd_cheer')); 
+                }
             } 
             // TEAM 0 SCORING (VISITOR) -> POLITE APPLAUSE
             else {
@@ -8677,10 +8679,13 @@ let crowdGaspCooldown = 0;
 
 function updateCrowdAmbience() {
     // *** FIX: SHUT UP IF SIMULATING ***
-    if (!isAudioEnabled()) {
-        if (currentCrowdVol > 0) {
+    if (!isAudioEnabled() || !crowdEnabled) {
+        if (currentCrowdVol > 0 || crowdLayers.length > 0) {
             currentCrowdVol = 0;
-            crowdLayers.forEach(id => crowdDeck.volume(0, id));
+            crowdLayers.forEach(id => {
+                crowdDeck.volume(0, id); // Force silent immediately
+                // Note: We don't stop() because we want it ready to fade back in
+            });
         }
         return;
     }
@@ -8762,20 +8767,23 @@ function toggleCrowd() {
     crowdEnabled = !crowdEnabled;
 
     if (crowdEnabled) {
-        // Turn On
-        if (!crowdDeck.playing(crowdId)) {
-             crowdId = crowdDeck.play('crowd_bed'); // Note: 'crowd_loop' was likely a typo in your old code, assumed 'crowd_bed'
+        // Only start playing if we are actually watching a game
+        if (isAudioEnabled() && !crowdDeck.playing(crowdId)) {
+             crowdId = crowdDeck.play('crowd_bed'); 
              crowdDeck.loop(true, crowdId);
+             crowdDeck.volume(0, crowdId); // Start silent
+             crowdDeck.fade(0, 0.3, 1000, crowdId); // Fade in
         }
-        crowdDeck.fade(0, 0.3, 1000, crowdId);
-        console.log("Crowd ON");
+        console.log("Crowd Enabled");
     } else {
-        // Turn Off
-        crowdDeck.fade(crowdDeck.volume(crowdId), 0, 1000, crowdId);
-        setTimeout(() => {
-            if (!crowdEnabled) crowdDeck.stop(crowdId);
-        }, 1000);
-        console.log("Crowd OFF");
+        // Fade out
+        if (crowdDeck.playing(crowdId)) {
+             crowdDeck.fade(crowdDeck.volume(crowdId), 0, 1000, crowdId);
+             setTimeout(() => {
+                 if (!crowdEnabled) crowdDeck.stop(crowdId);
+             }, 1000);
+        }
+        console.log("Crowd Disabled");
     }
 }
 
@@ -8783,11 +8791,9 @@ function toggleCrowd() {
 function checkCrowdAnticipation() {
 
     if (!isAudioEnabled()) return;
-
+    if (!crowdEnabled) return;
     if (isResetActive()) return;
-
-    if (lastGoalTeam !== null) return; 
- 
+    if (lastGoalTeam !== null) return;  
     if (typeof isReplaying !== 'undefined' && isReplaying) return;
     if (typeof isPaused !== 'undefined' && isPaused) return;
 
@@ -8950,6 +8956,7 @@ window.addEventListener('keydown', () => {
 
 </body>
 </html>
+
 
 
 
