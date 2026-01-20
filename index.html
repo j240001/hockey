@@ -2238,7 +2238,8 @@ function whistle(reason, durationMs = 2000) {
     if (isResetActive()) return; 
 
     // +++ AUDIO TRIGGER +++
-    playGameSound('referee_whistle', 0.7);
+    const soundKey = (Math.random() < 0.5) ? 'whistle_1' : 'whistle_2';
+    playGameSound(soundKey, 0.7);
 
     // Reset current state variables that conflict with the whistle.
     const owner = getPlayerById(puck.ownerId);
