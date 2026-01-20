@@ -4847,7 +4847,7 @@ function updateAISkater(p) {
 
     // Apply Rotation
     let angleDiff = normalizeAngle(desiredFacing - p.angle);
-    let currentTurnRate = p.turnRate * 1.2;
+    let currentTurnRate = p.turnRate * 2.2;
     angleDiff = clamp(angleDiff, -currentTurnRate, currentTurnRate);
     p.angle += angleDiff;
     
@@ -8979,6 +8979,7 @@ window.addEventListener('keydown', () => {
 
 </body>
 </html>
+
 
 
 
