@@ -5408,7 +5408,7 @@ function processSkatingAudio(p) {
 
     // 2. Velocity Threshold (Don't play if barely moving)
     const speed = Math.hypot(p.vx, p.vy);
-    if (speed < 1.2) return;
+    if (speed < 1.6) return;
 
     // 3. Initialize Audio Timer if missing
     if (typeof p.audioStrideTimer === 'undefined') p.audioStrideTimer = 0;
@@ -5418,7 +5418,7 @@ function processSkatingAudio(p) {
 
     // 5. Trigger Sound (Every ~45 frames)
     // Adjust this number to match the visual stride speed
-    const STRIDE_TEMPO = 31; 
+    const STRIDE_TEMPO = 33; 
 
     if (p.audioStrideTimer > STRIDE_TEMPO) {
         p.audioStrideTimer = 0; // Reset
