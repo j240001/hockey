@@ -5387,6 +5387,11 @@ function updatePlayer(p) {
         if (p.isHuman) updateHumanSkater(p);
         else           updateAISkater(p);
 
+        // +++ AUDIO +++
+        if (isAudioEnabled()) {
+            processSkatingAudio(p);
+        }
+
         return;
     }
 
@@ -5394,6 +5399,41 @@ function updatePlayer(p) {
         updateGoalie(p);
     }
 }
+
+
+
+function processSkatingAudio(p) {
+    // 1. Only play if moving and pushing (accelerating)
+    if (!p.isAccelerating) return;
+
+    // 2. Velocity Threshold (Don't play if barely moving)
+    const speed = Math.hypot(p.vx, p.vy);
+    if (speed < 0.5) return;
+
+    // 3. Initialize Audio Timer if missing
+    if (typeof p.audioStrideTimer === 'undefined') p.audioStrideTimer = 0;
+
+    // 4. Increment Timer
+    p.audioStrideTimer++;
+
+    // 5. Trigger Sound (Every ~45 frames)
+    // Adjust this number to match the visual stride speed
+    const STRIDE_TEMPO = 45; 
+
+    if (p.audioStrideTimer > STRIDE_TEMPO) {
+        p.audioStrideTimer = 0; // Reset
+        
+        // A. Randomize between clips 1 and 5
+        const clipIndex = Math.floor(Math.random() * 5) + 1;
+        const key = `skate_${clipIndex}`;
+
+        // B. Play the sound (Volume 0.3 for background ambience)
+        playGameSound(key, 0.3);
+    }
+}
+
+
+
 
 
 // Check if any player is "Camping" in the offensive zone early
@@ -8618,15 +8658,15 @@ const sfxDeck = new Howl({
     volume: 1.0,
     sprite: {
         // GOAL HORN
-        goal_horn:        [0, 3105], // Fill in your numbers
+        goal_horn:        [0, 3105], 
 
         // BOARD HITS
         puck_board_soft:  [3105, 668], // Normal hit
-        puck_board_hard:  [3774, 782], // The "Hardest collisions"
+        puck_board_hard:  [3774, 782], // Hard hit
 
         // STICK/PUCK (Shooting & Catching)
-        shoot_soft:       [4556, 337], // Normal shot / Crisp pass catch
-        shoot_hard:       [4893, 399], // The "Hard shot" (Slapshots)
+        shoot_soft:       [4556, 337], // Normal shot / pass catch
+        shoot_hard:       [4893, 399], // Harder shot
 
         // WHISTLES (Random)
         whistle_1:        [5292, 619], 
@@ -8636,8 +8676,15 @@ const sfxDeck = new Howl({
         pad_save_1:       [6825, 533],
         pad_save_2:       [7357, 557],
 
-        stick_drop_1:     [7914, 1598],
-        stick_drop_2:     [9512, 732] 
+        stick_drop_1:     [7914, 529],
+        stick_drop_2:     [8444, 497],
+
+        skate_1: [8941, 794], 
+        skate_2: [9734, 653], 
+        skate_3: [10387, 692], 
+        skate_4: [11079, 500], 
+        skate_5: [11579, 500], 
+        skate_6: [12080, 752]
     }
 });
 
@@ -8891,6 +8938,14 @@ const SOUND_COOLDOWNS = {
     'whistle_1': 2000, 
     'whistle_2': 2000,
     'goal_horn': 2000,
+
+    // SKATING
+    'skate_1': 100,
+    'skate_2': 100,
+    'skate_3': 100,
+    'skate_4': 100,
+    'skate_5': 100,
+    'skate_6': 100,
     
     // Announcer
     'bob_intro': 10000,
