@@ -1654,7 +1654,7 @@ function checkOffsides() {
                 }
             }
             if (early && p.ownerId !== null && getPlayerById(p.ownerId).team === 1) {
-                 whistle("OFFSIDE! (Team 1)");
+                 whistle("OFFSIDE");
             } else if (early) {
                 offsideState.active = true;
                 offsideState.team = 1;
@@ -1670,7 +1670,7 @@ function checkOffsides() {
                 }
             }
             if (early && p.ownerId !== null && getPlayerById(p.ownerId).team === 1) {
-                 whistle("OFFSIDE! (Team 1)");
+                 whistle("OFFSIDE");
             } else if (early) {
                 offsideState.active = true;
                 offsideState.team = 1;
