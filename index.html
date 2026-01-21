@@ -4313,7 +4313,7 @@ function spawnDroppedStick(p) {
     p.droppedStick = null; 
 
     const dropKey = (Math.random() < 0.5) ? 'stick_drop_1' : 'stick_drop_2';
-    playGameSound(dropKey, 0.6);
+    playGameSound(dropKey, 0.8);
 }
 
 
@@ -4366,7 +4366,7 @@ function updateDroppedSticks() {
             const speed = Math.hypot(s.vx, s.vy);
             if (speed > 1.0) {
                 const wallKey = (Math.random() < 0.5) ? 'stick_drop_1' : 'stick_drop_2';
-                playGameSound(wallKey, 0.4); 
+                playGameSound(wallKey, 0.7); 
             }
         }
 
@@ -4466,7 +4466,7 @@ function resolveStickInteractions(s, index) {
                 const isKickNearCenter = distToCOG < 10;
 
                 const kickKey = (Math.random() < 0.5) ? 'stick_drop_1' : 'stick_drop_2';
-                playGameSound(kickKey, 0.4);
+                playGameSound(kickKey, 0.7);
                 
                 // --- HEAVY STICK TUNING ---
                 // WAS: 0.8 (Featherweight) -> NOW: 0.3 (Heavy)
