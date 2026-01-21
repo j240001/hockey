@@ -4311,6 +4311,9 @@ function spawnDroppedStick(p) {
     // Update Player State
     p.stickDropped = true;
     p.droppedStick = null; 
+
+    const dropKey = (Math.random() < 0.5) ? 'stick_drop_1' : 'stick_drop_2';
+    playGameSound(dropKey, 0.6);
 }
 
 
@@ -4354,6 +4357,16 @@ function updateDroppedSticks() {
             s.vy *= -0.6;
             s.y = (s.y < RINK_MIN_Y) ? RINK_MIN_Y + 2 : RINK_MAX_Y - 2;
             s.vRot += (Math.random() - 0.5) * 0.2;
+        }
+
+        // +++ AUDIO TRIGGER +++
+        if (hitWall) {
+            // Only play if it hit with decent speed
+            const speed = Math.hypot(s.vx, s.vy);
+            if (speed > 1.0) {
+                const wallKey = (Math.random() < 0.5) ? 'stick_drop_1' : 'stick_drop_2';
+                playGameSound(wallKey, 0.4); 
+            }
         }
 
         // 4. INTERACTION COOLDOWN
@@ -4450,6 +4463,9 @@ function resolveStickInteractions(s, index) {
                 // Determine where we hit the stick (Handle vs Blade)
                 const distToCOG = Math.hypot(p.x - s.x, p.y - s.y);
                 const isKickNearCenter = distToCOG < 10;
+
+                const kickKey = (Math.random() < 0.5) ? 'stick_drop_1' : 'stick_drop_2';
+                playGameSound(kickKey, 0.4);
                 
                 // --- HEAVY STICK TUNING ---
                 // WAS: 0.8 (Featherweight) -> NOW: 0.3 (Heavy)
@@ -8617,7 +8633,10 @@ const sfxDeck = new Howl({
 
         // PAD SAVES (Random)
         pad_save_1:       [6825, 533],
-        pad_save_2:       [7357, 557]
+        pad_save_2:       [7357, 557],
+
+        stick_drop_1:     [7914, 1598],
+        stick_drop_2:     [9512, 732] 
     }
 });
 
@@ -8866,6 +8885,8 @@ const SOUND_COOLDOWNS = {
     'puck_board_hard': 80,
     'pad_save_1': 100,
     'pad_save_2': 100,
+    'stick_drop_1': 200,
+    'stick_drop_2': 200,
     'whistle_1': 4000, 
     'whistle_2': 4000,
     'goal_horn': 15000,
