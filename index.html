@@ -4321,21 +4321,18 @@ function updateDroppedSticks() {
     for (let i = droppedSticks.length - 1; i >= 0; i--) {
         const s = droppedSticks[i];
 
-        // --- NEW: MAGIC RETURN LOGIC ---
+        // --- MAGIC RETURN LOGIC (Keep this) ---
         if (s.returnTimer > 0) {
             s.returnTimer--;
         } else {
-            // Timer expired! Magically return to owner.
             const owner = getPlayerById(s.ownerId);
             if (owner) {
                 owner.stickDropped = false;
                 owner.droppedStick = null;
             }
-            // Remove from ice
             droppedSticks.splice(i, 1);
-            continue; // Skip physics for this deleted stick
+            continue; 
         }
-        // -------------------------------
 
         // 1. PHYSICS INTEGRATION
         s.x += s.vx;
@@ -4347,21 +4344,25 @@ function updateDroppedSticks() {
         s.vy *= STICK_PHYSICS.friction;
         s.vRot *= STICK_PHYSICS.rotFriction;
 
-        // 3. WALL COLLISIONS
+        // 3. WALL COLLISIONS (Now tracking 'hitWall')
+        let hitWall = false; // <--- MISSING LINE #1: Initialize the flag
+
         if (s.x < RINK_MIN_X || s.x > RINK_MAX_X) {
             s.vx *= -0.6;
             s.x = (s.x < RINK_MIN_X) ? RINK_MIN_X + 2 : RINK_MAX_X - 2;
             s.vRot += (Math.random() - 0.5) * 0.2;
+            hitWall = true; // <--- MISSING LINE #2: Flag the hit
         }
         if (s.y < RINK_MIN_Y || s.y > RINK_MAX_Y) {
             s.vy *= -0.6;
             s.y = (s.y < RINK_MIN_Y) ? RINK_MIN_Y + 2 : RINK_MAX_Y - 2;
             s.vRot += (Math.random() - 0.5) * 0.2;
+            hitWall = true; // <--- MISSING LINE #3: Flag the hit
         }
 
         // +++ AUDIO TRIGGER +++
+        // Now this variable actually exists!
         if (hitWall) {
-            // Only play if it hit with decent speed
             const speed = Math.hypot(s.vx, s.vy);
             if (speed > 1.0) {
                 const wallKey = (Math.random() < 0.5) ? 'stick_drop_1' : 'stick_drop_2';
