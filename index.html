@@ -5418,17 +5418,17 @@ function processSkatingAudio(p) {
 
     // 5. Trigger Sound (Every ~45 frames)
     // Adjust this number to match the visual stride speed
-    const STRIDE_TEMPO = 45; 
+    const STRIDE_TEMPO = 35; 
 
     if (p.audioStrideTimer > STRIDE_TEMPO) {
         p.audioStrideTimer = 0; // Reset
         
-        // A. Randomize between clips 1 and 5
-        const clipIndex = Math.floor(Math.random() * 5) + 1;
+        // A. Randomize between clips 1 and 6
+        const clipIndex = Math.floor(Math.random() * 6) + 1;
         const key = `skate_${clipIndex}`;
 
         // B. Play the sound (Volume 0.3 for background ambience)
-        playGameSound(key, 0.3);
+        playGameSound(key, 0.2);
     }
 }
 
