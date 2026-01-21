@@ -1799,9 +1799,9 @@ function collideWithRink(obj, radius) {
 
 
 // =========================================================
-// COLLISIONS (PUCK vs WALLS)
+// COLLISIONS (PUCK vs WALLS) - "Dead Board" Update
 // =========================================================
-function collideCircleWithRink(obj, radius, restitution = 0.8) {
+function collideCircleWithRink(obj, radius) {
     let collided = false;
 
     for (const seg of rinkSegments) {
@@ -1813,7 +1813,7 @@ function collideCircleWithRink(obj, radius, restitution = 0.8) {
         const segLen2 = dx * dx + dy * dy;
         if (segLen2 === 0) continue;
 
-        // project point onto segment
+        // Project point onto segment
         const t = ((obj.x - x1) * dx + (obj.y - y1) * dy) / segLen2;
         const clamped = Math.max(0, Math.min(1, t));
         const cx = x1 + clamped * dx;
@@ -1826,72 +1826,85 @@ function collideCircleWithRink(obj, radius, restitution = 0.8) {
 
         if (dist2 < minDist * minDist && dist2 > 0.000001) {
             const dist = Math.sqrt(dist2);
+            
+            // The Wall Normal (Perpendicular)
             const unx = nx / dist;
             const uny = ny / dist;
 
-            // push out to exactly minDist
+            // Push out to avoid sticking
             obj.x = cx + unx * minDist;
             obj.y = cy + uny * minDist;
 
-            // reflect velocity
-            const dot = obj.vx * unx + obj.vy * uny;
-            obj.vx = obj.vx - 2 * dot * unx;
-            obj.vy = obj.vy - 2 * dot * uny;
+            // --- NEW PHYSICS: COMPONENT SPLITTING ---
+            
+            // 1. Calculate the impact speed along the Normal (The "smash" factor)
+            const vDotN = obj.vx * unx + obj.vy * uny;
 
-            // rink vs goal restitution (same idea as good goalie)
-            let rest = restitution;
-            if (seg.type === "goal") rest = 0.2;
+            // 2. Separate velocity into Normal (Bounce) and Tangent (Slide) components
+            const vNormalX = vDotN * unx;
+            const vNormalY = vDotN * uny;
+            
+            const vTangentX = obj.vx - vNormalX;
+            const vTangentY = obj.vy - vNormalY;
 
-            obj.vx *= rest;
-            obj.vy *= rest;
+            // 3. APPLY SETTINGS (Adjust these two numbers!)
+            // A. BOUNCE: How much energy is kept on direct hits?
+            // 0.4 = Dead boards (realistic). 0.9 = Super bouncy.
+            let wallBounciness = 0.5; 
 
-            // =========================================================
-            // *** NEW: PASS TRACKING INTERRUPT ***
-            // If the puck hits a wall, the "Direct Pass" failed.
-            // =========================================================
+            // B. FRICTION: How much speed is kept when sliding?
+            // 0.98 = Ice (almost no friction). 0.5 = Sandpaper.
+            let wallSlide = 0.98;
+
+            // Special case: Goal nets are dead soft
+            if (seg.type === "goal") {
+                wallBounciness = 0.1;
+                wallSlide = 0.5;
+            }
+
+            // 4. RECOMBINE
+            // Flip the normal (bounce back) and scale it
+            const newNormalX = -vNormalX * wallBounciness;
+            const newNormalY = -vNormalY * wallBounciness;
+            
+            // Keep the tangent (slide forward) and scale it
+            const newTangentX = vTangentX * wallSlide;
+            const newTangentY = vTangentY * wallSlide;
+
+            obj.vx = newNormalX + newTangentX;
+            obj.vy = newNormalY + newTangentY;
+
+            // ----------------------------------------
+
+            // PASS INTERRUPT
             if (obj === puck && puck.passTargetId !== null) {
                 puck.passTargetId = null; 
             }
-            // =========================================================
 
-            // +++ AUDIO TRIGGER +++ 
-            // Only play if it's the puck AND it hit hard enough
+            // AUDIO TRIGGER
             if (obj === puck) {
-                const impactIntensity = Math.abs(dot); 
+                const impactIntensity = Math.abs(vDotN); 
                 
                 if (impactIntensity > 1.0 && isAudioEnabled()) {
                     let vol = Math.min(0.3, impactIntensity * 0.21); 
-
-                    // LOGIC: Use 'Hard' sound only for high-velocity impacts (adjust 6.0 to taste)
-                    let soundKey = (impactIntensity > 4.0) ? 'puck_board_hard' : 'puck_board_soft';
-                    
+                    let soundKey = (impactIntensity > 6.0) ? 'puck_board_hard' : 'puck_board_soft';
                     playGameSound(soundKey, vol);
 
-                    // *** BIASED CROWD REACTION ***
-                    // Only react if hit was hard (missed shot) AND random chance
+                    // CROWD REACTION
                     if (crowdEnabled && impactIntensity > 4.0 && Math.random() < 0.4) {
-                         
-                         // Who shot it?
                          let isHomeShot = false;
                          if (puck.lastOwnerId) {
                              const shooter = getPlayerById(puck.lastOwnerId);
                              if (shooter && shooter.team === 1) isHomeShot = true;
                          }
-
                          let reactionId = crowdDeck.play('crowd_ohhh');
-                         
-                         if (isHomeShot) {
-                             crowdDeck.volume(1.0, reactionId); // LOUD GASP for Home miss
-                         } else {
-                             crowdDeck.volume(0.3, reactionId); // Quiet murmur for Visitor miss
-                         }
+                         crowdDeck.volume(isHomeShot ? 1.0 : 0.3, reactionId); 
                     }
                 }
             }
-            // +++ END AUDIO +++
 
             collided = true;
-            break; // one wall is enough
+            break; 
         }
     }
 
