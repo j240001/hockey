@@ -1883,15 +1883,31 @@ function collideCircleWithRink(obj, radius) {
 
             // AUDIO TRIGGER
             if (obj === puck) {
+                // impactIntensity is the speed PERPENDICULAR to the wall.
+                // Grazing hits have very low impactIntensity, even if the puck is fast.
                 const impactIntensity = Math.abs(vDotN); 
                 
-                if (impactIntensity > 1.0 && isAudioEnabled()) {
-                    let vol = Math.min(0.3, impactIntensity * 0.21); 
-                    let soundKey = (impactIntensity > 6.0) ? 'puck_board_hard' : 'puck_board_soft';
+                // 1. HIGHER THRESHOLD: Ignore anything below 2.0 (was 1.0)
+                // This filters out almost all "sliding" sounds.
+                if (impactIntensity > 2.0 && isAudioEnabled()) {
+                    
+                    // 2. GENTLER VOLUME CURVE
+                    // Old math: Maxed out at impact 1.5. 
+                    // New math: Needs impact 10.0 to reach max volume.
+                    // A fast graze (intensity ~3.0) will now be very quiet (0.05).
+                    let vol = (impactIntensity - 2.0) * 0.05;
+                    
+                    // Clamp max volume to 0.4
+                    if (vol > 0.4) vol = 0.4;
+
+                    // 3. SELECT SOUND
+                    // Only play the "Hard" crack if it's a massive hit (> 8.0)
+                    let soundKey = (impactIntensity > 8.0) ? 'puck_board_hard' : 'puck_board_soft';
+                    
                     playGameSound(soundKey, vol);
 
-                    // CROWD REACTION
-                    if (crowdEnabled && impactIntensity > 4.0 && Math.random() < 0.4) {
+                    // CROWD REACTION (Unchanged)
+                    if (crowdEnabled && impactIntensity > 5.0 && Math.random() < 0.4) {
                          let isHomeShot = false;
                          if (puck.lastOwnerId) {
                              const shooter = getPlayerById(puck.lastOwnerId);
@@ -5421,7 +5437,7 @@ function processSkatingAudio(p) {
 
     // 2. Velocity Threshold (Don't play if barely moving)
     const speed = Math.hypot(p.vx, p.vy);
-    if (speed < 1.6) return;
+    if (speed < 1.4) return;
 
     // 3. Initialize Audio Timer if missing
     if (typeof p.audioStrideTimer === 'undefined') p.audioStrideTimer = 0;
