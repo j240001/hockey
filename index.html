@@ -3145,56 +3145,60 @@ function resolvePlayerCollisions() {
 
                 
                 // ---------------------------------------------------------
-                // NEW: ASYMMETRICAL FORCE LOGIC
+                // NEW: ASYMMETRICAL FORCE LOGIC (FIXED)
                 // ---------------------------------------------------------
 
-                // 1. Who is trying to hit?
+                // 1. SAFETY: The Carrier CANNOT be the Hitter.
+                // If you have the puck, you are the Victim, even if holding the button (Charging Shot).
+                if (puck.ownerId === a.id) a.isChecking = false;
+                if (puck.ownerId === b.id) b.isChecking = false;
+
                 const aHits = (a.isChecking === true);
                 const bHits = (b.isChecking === true);
                 
-                // 2. Base Physics Force (Raw impact)
+                // 2. Base Physics Force
                 const rawForce = Math.abs(jImpulse) * 0.5;
 
-                // 3. CALCULATE FORCE INDIVIDUALLY (Break Newton's Law)
                 let forceA = rawForce;
                 let forceB = rawForce;
                 
-                // CARRIER VULNERABILITY (Keep this)
+                // 3. CARRIER VULNERABILITY (Carrier is naturally soft)
                 if (puck.ownerId === a.id) forceA *= 1.4;
                 if (puck.ownerId === b.id) forceB *= 1.4;
 
                 // 4. APPLY INTENT MODIFIERS
                 if (!aHits && !bHits) {
-                     // SCENARIO A: ACCIDENT (Neither checking)
+                     // SCENARIO A: ACCIDENT (Neither is hitting)
+                     // Both take reduced damage.
                      forceA *= 0.3;
                      forceB *= 0.3;
                 } 
                 else {
-                    // SCENARIO B: INTENT IS INVOLVED
+                    // SCENARIO B: VIOLENCE (At least one person is hitting)
                     
                     // Modify Player A
-                    if (aHits) forceA *= 0.5; // Hitter absorbs shock (Strong)
-                    else       forceA *= 2.5; // Victim takes damage (Weak)
+                    if (aHits) forceA *= 0.3; // Hitter feels almost nothing (Iron Shield)
+                    else       forceA *= 2.5; // Victim gets CRUSHED
                     
                     // Modify Player B
-                    if (bHits) forceB *= 0.5; // Hitter absorbs shock
-                    else       forceB *= 2.5; // Victim takes damage
+                    if (bHits) forceB *= 0.3; // Hitter feels almost nothing
+                    else       forceB *= 2.5; // Victim gets CRUSHED
                 }
 
-                // 5. DETERMINE THRESHOLDS (The Stun Shield)
+                // 5. DETERMINE THRESHOLDS
+                // Base thresholds
                 let threshA = (puck.ownerId === a.id) ? 1.0 : 1.5;
                 let threshB = (puck.ownerId === b.id) ? 1.0 : 1.5;
 
-                // If checking, slight bonus to threshold (optional, since we lowered force)
-                if (aHits) threshA = 3.0; 
-                if (bHits) threshB = 3.0; 
+                // Bonus Shield for the Hitter (Extra insurance)
+                if (aHits) threshA = 5.0; 
+                if (bHits) threshB = 5.0; 
 
                 // 6. APPLY OUTCOMES
                 if (a.team !== b.team) {
                     
                     // CHECK PLAYER A
                     if (forceA > threshA) {
-                        // Use your Exponential Math
                         let frames = Math.floor(Math.pow(forceA, 2.0) * 6);
                         if (frames > 120) frames = 120;
                         applyStun(a, frames, forceA);
