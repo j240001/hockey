@@ -3208,8 +3208,9 @@ function resolvePlayerCollisions() {
 // Helper to apply stun and puck loss cleanly
 function applyStun(p, frames, force) {
     p.stunTimer = frames;
-    const spinSpeed = 0.005 + (force * 0.01); 
-    p.stunRot = (Math.random() < 0.5 ? spinSpeed : -spinSpeed); 
+    p.stunRot = (Math.random() < 0.5 ? 0.1 : -0.1);
+
+    p.recoveryTimer = frames + 300; // duration
 
     // --- DROP STICK MECHANIC (Updated) ---
     if (force > 3.6 && !p.stickDropped) {
@@ -3581,17 +3582,26 @@ function updateHumanSkater(p) {
     // =========================================================
     const isBraking = keys.ArrowDown;
     const isPushing = keys.ArrowUp;
+
+    // PENALTY B: TURNING
+    // If recovering, reduce turn rate by 60%
+    let effectiveTurnRate = p.turnRate;
+    if (p.isRecovering) effectiveTurnRate *= 0.4;
     const turnLeft  = keys.ArrowLeft;
     const turnRight = keys.ArrowRight;
 
     p.isAccelerating = isPushing;
 
-    let turn = p.turnRate * (isBraking ? 2.5 : 1.2); 
+    let turn = effectiveTurnRate * (isBraking ? 2.5 : 1.2);
     if (turnLeft)  p.angle -= turn;
     if (turnRight) p.angle += turn;
 
     if (isPushing) {
-        const drive = p.baseDrive * p.energy;
+        // PENALTY C: ACCELERATION
+        // If recovering, reduce drive (acceleration) by 70%
+        let drive = p.baseDrive * p.energy;
+        if (p.isRecovering) drive *= 0.3; 
+
         p.vx += Math.cos(p.angle) * drive;
         p.vy += Math.sin(p.angle) * drive;
     }
@@ -4911,6 +4921,7 @@ function updateAISkater(p) {
     // Apply Rotation
     let angleDiff = normalizeAngle(desiredFacing - p.angle);
     let currentTurnRate = p.turnRate * 1.2;
+    if (p.isRecovering) currentTurnRate *= 0.4;
     angleDiff = clamp(angleDiff, -currentTurnRate, currentTurnRate);
     p.angle += angleDiff;
     
@@ -4925,6 +4936,7 @@ function updateAISkater(p) {
     
     let drive = p.baseDrive * p.energy;
     if (distToTarget < 12) drive = 0.001; 
+    if (p.isRecovering) drive *= 0.3;
 
     if (drive > 0) {
         p.vx += Math.cos(p.angle) * drive;
@@ -5397,10 +5409,25 @@ function updatePlayer(p) {
     if (p.type === "skater") {
         applyNatureFatigue(p); 
         
+        // carrying the puck slows the skater down a bit
         if (puck.ownerId === p.id) {
             p.maxSpeed *= 0.93; 
         }
 
+        // --- RECOVERY after being body checked ---
+        p.isRecovering = false; // Reset flag
+        
+        if (p.recoveryTimer > 0) {
+            p.recoveryTimer--; // Tick down
+            
+            // Only apply penalties if Phase 1 (Hard Stun) is over
+            if (p.stunTimer <= 0) {
+                p.isRecovering = true; // Flag for other functions
+                
+                // PENALTY A: SPEED LIMIT
+                p.maxSpeed *= 0.30; 
+            }
+        }
 
     }
     
