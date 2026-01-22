@@ -3210,7 +3210,7 @@ function applyStun(p, frames, force) {
     p.stunTimer = frames;
     p.stunRot = (Math.random() < 0.5 ? 0.1 : -0.1);
 
-    p.recoveryTimer = frames + 300; // duration
+    p.recoveryTimer = frames + 100; // duration
 
     // --- DROP STICK MECHANIC (Updated) ---
     if (force > 3.6 && !p.stickDropped) {
@@ -5425,7 +5425,7 @@ function updatePlayer(p) {
                 p.isRecovering = true; // Flag for other functions
                 
                 // PENALTY A: SPEED LIMIT
-                p.maxSpeed *= 0.30; 
+                p.maxSpeed *= 0.50; 
             }
         }
 
