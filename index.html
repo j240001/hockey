@@ -3109,8 +3109,9 @@ function tryStealPuck(attacker, owner) {
 
 
 
+
 // =========================================================
-// PLAYER vs PLAYER COLLISIONS (TUNED & MOMENTUM BASED)
+// PLAYER vs PLAYER COLLISIONS 
 // =========================================================
 function resolvePlayerCollisions() {
     for (let i = 0; i < players.length; i++) {
@@ -3132,11 +3133,9 @@ function resolvePlayerCollisions() {
                 const ny = dy / dist;
 
                 // --- 1. MASS RATIOS ---
-                // Skaters = Mass 1.0, Goalies = Mass 10.0
                 const massA = (a.type === "goalie") ? 10.0 : 1.0;
                 const massB = (b.type === "goalie") ? 10.0 : 1.0;
                 const totalMass = massA + massB;
-
                 const aRatio = massB / totalMass; 
                 const bRatio = massA / totalMass; 
 
@@ -3165,20 +3164,37 @@ function resolvePlayerCollisions() {
                 b.vx += impulseX * bRatio;
                 b.vy += impulseY * bRatio;
 
-                // --- 4. IMPACT & STUN LOGIC (FIXED) ---
-                // We multiply by 0.5 to match the original game's tuning scale.
-                // Without this, every hit registers as double strength.
-                const impactForce = Math.abs(jImpulse) * 0.5;
+                // --- 4. IMPACT & STUN LOGIC (CARRIER VULNERABILITY) ---
+                // Base impact force (Speed difference)
+                const baseForce = Math.abs(jImpulse) * 0.5;
 
-                if (impactForce > 1.50 && a.team !== b.team) {
-                    let stunFrames = impactForce * 12;
-                    if (stunFrames < 15) stunFrames = 15;
-                    if (stunFrames > 90) stunFrames = 90;
-                    stunFrames = Math.floor(stunFrames);
+                if (a.team !== b.team) {
+                    const aIsCarrier = (puck.ownerId === a.id);
+                    const bIsCarrier = (puck.ownerId === b.id);
 
-                    // Apply stun based on who moved the most
-                    if (aRatio > 0.3) applyStun(a, stunFrames, impactForce);
-                    if (bRatio > 0.3) applyStun(b, stunFrames, impactForce);
+                    // --- VULNERABILITY MULTIPLIERS ---
+                    // Carriers take 40% more force and have a lower stun threshold
+                    let forceA = baseForce * (aIsCarrier ? 1.4 : 1.0);
+                    let forceB = baseForce * (bIsCarrier ? 1.4 : 1.0);
+                    
+                    let threshA = aIsCarrier ? 1.0 : 1.5; // Easier to stun carrier
+                    let threshB = bIsCarrier ? 1.0 : 1.5;
+
+                    // Apply Stun A
+                    if (forceA > threshA && aRatio > 0.3) {
+                        let stunFrames = Math.floor(forceA * 12);
+                        if (stunFrames < 15) stunFrames = 15;
+                        if (stunFrames > 90) stunFrames = 90;
+                        applyStun(a, stunFrames, forceA);
+                    }
+
+                    // Apply Stun B
+                    if (forceB > threshB && bRatio > 0.3) {
+                        let stunFrames = Math.floor(forceB * 12);
+                        if (stunFrames < 15) stunFrames = 15;
+                        if (stunFrames > 90) stunFrames = 90;
+                        applyStun(b, stunFrames, forceB);
+                    }
                 }
             }
         }
@@ -5379,6 +5395,12 @@ function updatePlayer(p) {
     //  Apply fatigue and physical limits FIRST ---
     if (p.type === "skater") {
         applyNatureFatigue(p); 
+        
+        if (puck.ownerId === p.id) {
+            p.maxSpeed *= 0.90; 
+        }
+
+
     }
     
     // === NEW: CELEBRATION OVERRIDE ===
@@ -9085,7 +9107,6 @@ window.addEventListener('keydown', () => {
 
 </body>
 </html>
-
 
 
 
