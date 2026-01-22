@@ -3111,7 +3111,7 @@ function tryStealPuck(attacker, owner) {
 
 
 // =========================================================
-// PLAYER vs PLAYER COLLISIONS 
+// PLAYER vs PLAYER: THE "INTENT" SYSTEM
 // =========================================================
 function resolvePlayerCollisions() {
     for (let i = 0; i < players.length; i++) {
@@ -3119,80 +3119,76 @@ function resolvePlayerCollisions() {
             const a = players[i];
             const b = players[j];
 
-            const ar = a.size / 2;
-            const br = b.size / 2;
-            const minDist = ar + br;
-
-            const dx = b.x - a.x;
-            const dy = b.y - a.y;
-            const dist2 = dx*dx + dy*dy;
+            // Standard Separation Logic (Keep this)
+            const ar = a.size / 2; const br = b.size / 2; const minDist = ar + br;
+            const dx = b.x - a.x; const dy = b.y - a.y; const dist2 = dx*dx + dy*dy;
 
             if (dist2 < minDist * minDist && dist2 > 0) {
                 const dist = Math.sqrt(dist2);
-                const nx = dx / dist;
-                const ny = dy / dist;
-
-                // --- 1. MASS RATIOS ---
-                const massA = (a.type === "goalie") ? 10.0 : 1.0;
-                const massB = (b.type === "goalie") ? 10.0 : 1.0;
-                const totalMass = massA + massB;
-                const aRatio = massB / totalMass; 
-                const bRatio = massA / totalMass; 
-
-                // --- 2. POSITIONAL CORRECTION ---
-                const overlap = (minDist - dist);
-                a.x -= nx * overlap * aRatio;
-                a.y -= ny * overlap * aRatio;
-                b.x += nx * overlap * bRatio;
-                b.y += ny * overlap * bRatio;
-
-                // --- 3. PHYSICS IMPULSE ---
-                const rvx = b.vx - a.vx;
-                const rvy = b.vy - a.vy;
-                const velAlongNormal = rvx * nx + rvy * ny;
-
-                if (velAlongNormal > 0) continue; 
-
-                const restitution = 0.9; 
-                const jImpulse = -(1 + restitution) * velAlongNormal;
+                const nx = dx / dist; const ny = dy / dist;
                 
-                const impulseX = jImpulse * nx;
-                const impulseY = jImpulse * ny;
+                // Physics Bounce (Keep this)
+                const overlap = (minDist - dist);
+                const totalMass = 2.0; // Simplified for now
+                a.x -= nx * overlap * 0.5; a.y -= ny * overlap * 0.5;
+                b.x += nx * overlap * 0.5; b.y += ny * overlap * 0.5;
 
-                a.vx -= impulseX * aRatio;
-                a.vy -= impulseY * aRatio;
-                b.vx += impulseX * bRatio;
-                b.vy += impulseY * bRatio;
+                const rvx = b.vx - a.vx; const rvy = b.vy - a.vy;
+                const velAlongNormal = rvx * nx + rvy * ny;
+                if (velAlongNormal > 0) continue;
 
-                // --- 4. IMPACT & STUN LOGIC (CARRIER VULNERABILITY) ---
-                // Base impact force (Speed difference)
-                const baseForce = Math.abs(jImpulse) * 0.5;
+                const jImpulse = -(1.9) * velAlongNormal; // 1.9 = bounce factor
+                const ix = jImpulse * nx; const iy = jImpulse * ny;
+                a.vx -= ix * 0.5; a.vy -= iy * 0.5;
+                b.vx += ix * 0.5; b.vy += iy * 0.5;
 
+                // ---------------------------------------------------------
+                // NEW: INTENT LOGIC
+                // ---------------------------------------------------------
+                
+                // 1. Who is trying to hit?
+                const aHits = (a.isChecking === true);
+                const bHits = (b.isChecking === true);
+
+                // 2. Calculate Base Physics Force
+                let force = Math.abs(jImpulse) * 0.5;
+
+                // 3. APPLY INTENT MODIFIERS
+                if (!aHits && !bHits) {
+                    // SCENARIO A: ACCIDENT (Neither is checking)
+                    // Result: Glancing blow. Minimize the outcome.
+                    force *= 0.3; 
+                } else {
+                    // SCENARIO B: VIOLENCE (Someone is checking)
+                    // Result: Amplify the force significantly.
+                    force *= 2.5; 
+                }
+
+                // 4. DETERMINE THRESHOLDS (The "Shield")
+                // Base Threshold: 1.5 (Standard stability)
+                let threshA = 1.5;
+                let threshB = 1.5;
+
+                // If you are checking, you are BRACED. You get a massive shield.
+                if (aHits) threshA = 6.0; 
+                if (bHits) threshB = 6.0; 
+
+                // 5. APPLY OUTCOMES (The Stun)
+                // We use your Exponential Curve (Force Squared)
+                
                 if (a.team !== b.team) {
-                    const aIsCarrier = (puck.ownerId === a.id);
-                    const bIsCarrier = (puck.ownerId === b.id);
-
-                    // --- VULNERABILITY MULTIPLIERS ---
-                    // Carriers take 40% more force and have a lower stun threshold
-                    let forceA = baseForce * (aIsCarrier ? 1.4 : 1.0);
-                    let forceB = baseForce * (bIsCarrier ? 1.4 : 1.0);
-                    
-                    let threshA = aIsCarrier ? 1.0 : 1.5; // Easier to stun carrier
-                    let threshB = bIsCarrier ? 1.0 : 1.5;
-
-                    // stunning
-                    // Apply Stun A
-                    if (forceA > threshA && aRatio > 0.3) {
-                        let stunFrames = Math.floor(Math.pow(forceA, 2.0) * 6);  // multiplier
-                        if (stunFrames > 120) stunFrames = 120;
-                        applyStun(a, stunFrames, forceA);
+                    // Check Player A
+                    if (force > threshA) {
+                        let frames = Math.floor(Math.pow(force, 2.0) * 6);
+                        if (frames > 120) frames = 120;
+                        applyStun(a, frames, force);
                     }
 
-                    // Apply Stun B
-                    if (forceB > threshB && bRatio > 0.3) {
-                        let stunFrames = Math.floor(Math.pow(forceA, 2.0) * 6);  // multiplier
-                        if (stunFrames > 120) stunFrames = 120;
-                        applyStun(b, stunFrames, forceB);
+                    // Check Player B
+                    if (force > threshB) {
+                        let frames = Math.floor(Math.pow(force, 2.0) * 6);
+                        if (frames > 120) frames = 120;
+                        applyStun(b, frames, force);
                     }
                 }
             }
@@ -3699,10 +3695,11 @@ function updateHumanSkater(p) {
 
         if (keys.Control) {
             p.isPoking = true; 
-            // *** SET LOCKOUT ***
+            p.isChecking = true;
             p.controlLockout = true; 
         } else {
             p.isPoking = false;
+            p.isChecking = false;
             p.controlLockout = false;
         }
     }
@@ -4863,6 +4860,17 @@ function updateAISkater(p) {
         d.action = "none"; 
     }
     // =========================================================
+
+
+p.isChecking = false;
+    if (puck.ownerId !== null && puck.ownerId !== p.id) {
+        const distToPuck = Math.hypot(puck.x - p.x, puck.y - p.y);
+        // If close (60px) and not a teammate, commit to the check
+        if (distToPuck < 60 && getPlayerById(puck.ownerId).team !== p.team) {
+            p.isChecking = true;
+        }
+    }
+
 
 // =========================================================
     // 4. EXECUTE MOVEMENT
