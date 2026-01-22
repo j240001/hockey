@@ -3142,53 +3142,69 @@ function resolvePlayerCollisions() {
                 a.vx -= ix * 0.5; a.vy -= iy * 0.5;
                 b.vx += ix * 0.5; b.vy += iy * 0.5;
 
-                // ---------------------------------------------------------
-                // NEW: INTENT LOGIC
-                // ---------------------------------------------------------
+
                 
+                // ---------------------------------------------------------
+                // NEW: ASYMMETRICAL FORCE LOGIC
+                // ---------------------------------------------------------
+
                 // 1. Who is trying to hit?
                 const aHits = (a.isChecking === true);
                 const bHits = (b.isChecking === true);
+                
+                // 2. Base Physics Force (Raw impact)
+                const rawForce = Math.abs(jImpulse) * 0.5;
 
-                // 2. Calculate Base Physics Force
-                let force = Math.abs(jImpulse) * 0.5;
+                // 3. CALCULATE FORCE INDIVIDUALLY (Break Newton's Law)
+                let forceA = rawForce;
+                let forceB = rawForce;
+                
+                // CARRIER VULNERABILITY (Keep this)
+                if (puck.ownerId === a.id) forceA *= 1.4;
+                if (puck.ownerId === b.id) forceB *= 1.4;
 
-                // 3. APPLY INTENT MODIFIERS
+                // 4. APPLY INTENT MODIFIERS
                 if (!aHits && !bHits) {
-                    // SCENARIO A: ACCIDENT (Neither is checking)
-                    // Result: Glancing blow. Minimize the outcome.
-                    force *= 0.3; 
-                } else {
-                    // SCENARIO B: VIOLENCE (Someone is checking)
-                    // Result: Amplify the force significantly.
-                    force *= 2.5; 
+                     // SCENARIO A: ACCIDENT (Neither checking)
+                     forceA *= 0.3;
+                     forceB *= 0.3;
+                } 
+                else {
+                    // SCENARIO B: INTENT IS INVOLVED
+                    
+                    // Modify Player A
+                    if (aHits) forceA *= 0.5; // Hitter absorbs shock (Strong)
+                    else       forceA *= 2.5; // Victim takes damage (Weak)
+                    
+                    // Modify Player B
+                    if (bHits) forceB *= 0.5; // Hitter absorbs shock
+                    else       forceB *= 2.5; // Victim takes damage
                 }
 
-                // 4. DETERMINE THRESHOLDS (The "Shield")
-                // Base Threshold: 1.5 (Standard stability)
-                let threshA = 1.5;
-                let threshB = 1.5;
+                // 5. DETERMINE THRESHOLDS (The Stun Shield)
+                let threshA = (puck.ownerId === a.id) ? 1.0 : 1.5;
+                let threshB = (puck.ownerId === b.id) ? 1.0 : 1.5;
 
-                // If you are checking, you are BRACED. You get a massive shield.
-                if (aHits) threshA = 6.0; 
-                if (bHits) threshB = 6.0; 
+                // If checking, slight bonus to threshold (optional, since we lowered force)
+                if (aHits) threshA = 3.0; 
+                if (bHits) threshB = 3.0; 
 
-                // 5. APPLY OUTCOMES (The Stun)
-                // We use your Exponential Curve (Force Squared)
-                
+                // 6. APPLY OUTCOMES
                 if (a.team !== b.team) {
-                    // Check Player A
-                    if (force > threshA) {
-                        let frames = Math.floor(Math.pow(force, 2.0) * 6);
+                    
+                    // CHECK PLAYER A
+                    if (forceA > threshA) {
+                        // Use your Exponential Math
+                        let frames = Math.floor(Math.pow(forceA, 2.0) * 6);
                         if (frames > 120) frames = 120;
-                        applyStun(a, frames, force);
+                        applyStun(a, frames, forceA);
                     }
 
-                    // Check Player B
-                    if (force > threshB) {
-                        let frames = Math.floor(Math.pow(force, 2.0) * 6);
+                    // CHECK PLAYER B
+                    if (forceB > threshB) {
+                        let frames = Math.floor(Math.pow(forceB, 2.0) * 6);
                         if (frames > 120) frames = 120;
-                        applyStun(b, frames, force);
+                        applyStun(b, frames, forceB);
                     }
                 }
             }
