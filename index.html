@@ -3208,7 +3208,7 @@ function resolvePlayerCollisions() {
 // Helper to apply stun and puck loss cleanly
 function applyStun(p, frames, force) {
     p.stunTimer = frames;
-    const spinSpeed = 0.1 + (force * 0.05); 
+    const spinSpeed = 0.05 + (force * 0.05); 
     p.stunRot = (Math.random() < 0.5 ? spinSpeed : -spinSpeed); 
 
     // --- DROP STICK MECHANIC (Updated) ---
