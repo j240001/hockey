@@ -3182,17 +3182,17 @@ function resolvePlayerCollisions() {
 
                     // Apply Stun A
                     if (forceA > threshA && aRatio > 0.3) {
-                        let stunFrames = Math.floor(forceA * 12);
-                        if (stunFrames < 15) stunFrames = 15;
-                        if (stunFrames > 90) stunFrames = 90;
+                        let stunFrames = Math.floor(forceA * 18);  // multiplier
+                        if (stunFrames < 15) stunFrames = 25; // minimum
+                        if (stunFrames > 90) stunFrames = 110;  // duration
                         applyStun(a, stunFrames, forceA);
                     }
 
                     // Apply Stun B
                     if (forceB > threshB && bRatio > 0.3) {
-                        let stunFrames = Math.floor(forceB * 12);
-                        if (stunFrames < 15) stunFrames = 15;
-                        if (stunFrames > 90) stunFrames = 90;
+                        let stunFrames = Math.floor(forceB * 18);  // multiplier
+                        if (stunFrames < 15) stunFrames = 25; // minimum
+                        if (stunFrames > 90) stunFrames = 110; // duration
                         applyStun(b, stunFrames, forceB);
                     }
                 }
@@ -3208,10 +3208,11 @@ function resolvePlayerCollisions() {
 // Helper to apply stun and puck loss cleanly
 function applyStun(p, frames, force) {
     p.stunTimer = frames;
-    p.stunRot = (Math.random() < 0.4 ? 0.12 : -0.12); 
+    const spinSpeed = 0.1 + (force * 0.05); 
+    p.stunRot = (Math.random() < 0.5 ? spinSpeed : -spinSpeed); 
 
     // --- DROP STICK MECHANIC (Updated) ---
-    if (force > 3.7 && !p.stickDropped) {
+    if (force > 3.6 && !p.stickDropped) {
         // Call the Global Physics Spawner
         spawnDroppedStick(p);
     }
@@ -4909,7 +4910,7 @@ function updateAISkater(p) {
 
     // Apply Rotation
     let angleDiff = normalizeAngle(desiredFacing - p.angle);
-    let currentTurnRate = p.turnRate * 2.2;
+    let currentTurnRate = p.turnRate * 1.2;
     angleDiff = clamp(angleDiff, -currentTurnRate, currentTurnRate);
     p.angle += angleDiff;
     
@@ -5397,7 +5398,7 @@ function updatePlayer(p) {
         applyNatureFatigue(p); 
         
         if (puck.ownerId === p.id) {
-            p.maxSpeed *= 0.90; 
+            p.maxSpeed *= 0.93; 
         }
 
 
