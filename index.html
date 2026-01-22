@@ -3205,10 +3205,10 @@ function applyStun(p, frames, force) {
     p.stunTimer = frames;
     p.stunRot = (Math.random() < 0.5 ? 0.02 : -0.02);
 
-    p.recoveryTimer = frames + 30; // duration
+    p.recoveryTimer = frames + 20; // duration
 
     // --- DROP STICK MECHANIC (Updated) ---
-    if (force > 3.6 && !p.stickDropped) {
+    if (force > 5.6 && !p.stickDropped) {
         // Call the Global Physics Spawner
         spawnDroppedStick(p);
     }
