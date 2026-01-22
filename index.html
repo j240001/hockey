@@ -3182,17 +3182,17 @@ function resolvePlayerCollisions() {
 
                     // Apply Stun A
                     if (forceA > threshA && aRatio > 0.3) {
-                        let stunFrames = Math.floor(forceA * 28);  // multiplier
-                        if (stunFrames < 25) stunFrames = 25; // minimum
-                        if (stunFrames > 150) stunFrames = 150;  // duration
+                        let stunFrames = Math.floor(forceA * 18);  // multiplier
+                        if (stunFrames < 10) stunFrames = 10; // minimum
+                        if (stunFrames > 80) stunFrames = 80;  // duration
                         applyStun(a, stunFrames, forceA);
                     }
 
                     // Apply Stun B
                     if (forceB > threshB && bRatio > 0.3) {
-                        let stunFrames = Math.floor(forceB * 28);  // multiplier
-                        if (stunFrames < 25) stunFrames = 25; // minimum
-                        if (stunFrames > 150) stunFrames = 150; // duration
+                        let stunFrames = Math.floor(forceB * 18);  // multiplier
+                        if (stunFrames < 10) stunFrames = 10; // minimum
+                        if (stunFrames > 80) stunFrames = 80; // duration
                         applyStun(b, stunFrames, forceB);
                     }
                 }
@@ -3208,7 +3208,7 @@ function resolvePlayerCollisions() {
 // Helper to apply stun and puck loss cleanly
 function applyStun(p, frames, force) {
     p.stunTimer = frames;
-    p.stunRot = (Math.random() < 0.5 ? 0.1 : -0.1);
+    p.stunRot = (Math.random() < 0.5 ? 0.02 : -0.02);
 
     p.recoveryTimer = frames + 100; // duration
 
