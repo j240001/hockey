@@ -3182,17 +3182,17 @@ function resolvePlayerCollisions() {
 
                     // Apply Stun A
                     if (forceA > threshA && aRatio > 0.3) {
-                        let stunFrames = Math.floor(forceA * 18);  // multiplier
+                        let stunFrames = Math.floor(forceA * 8);  // multiplier
                         if (stunFrames < 10) stunFrames = 10; // minimum
-                        if (stunFrames > 80) stunFrames = 80;  // duration
+                        if (stunFrames > 60) stunFrames = 60;  // duration
                         applyStun(a, stunFrames, forceA);
                     }
 
                     // Apply Stun B
                     if (forceB > threshB && bRatio > 0.3) {
-                        let stunFrames = Math.floor(forceB * 18);  // multiplier
+                        let stunFrames = Math.floor(forceB * 8);  // multiplier
                         if (stunFrames < 10) stunFrames = 10; // minimum
-                        if (stunFrames > 80) stunFrames = 80; // duration
+                        if (stunFrames > 60) stunFrames = 60; // duration
                         applyStun(b, stunFrames, forceB);
                     }
                 }
