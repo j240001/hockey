@@ -3062,6 +3062,10 @@ function passPuckToTeammate(p, target) {
 
 
 function tryStealPuck(attacker, owner) {
+
+
+    if (attacker.isChecking) return false;
+    
     // --- 1. GOALIE IMMUNITY ---
     if (owner.type === "goalie") return false;
 
