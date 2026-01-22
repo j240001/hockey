@@ -3180,19 +3180,18 @@ function resolvePlayerCollisions() {
                     let threshA = aIsCarrier ? 1.0 : 1.5; // Easier to stun carrier
                     let threshB = bIsCarrier ? 1.0 : 1.5;
 
+                    // stunning
                     // Apply Stun A
                     if (forceA > threshA && aRatio > 0.3) {
-                        let stunFrames = Math.floor(forceA * 8);  // multiplier
-                        if (stunFrames < 10) stunFrames = 10; // minimum
-                        if (stunFrames > 60) stunFrames = 60;  // duration
+                        let stunFrames = Math.floor(Math.pow(forceA, 2.0) * 6);  // multiplier
+                        if (stunFrames > 120) stunFrames = 120;
                         applyStun(a, stunFrames, forceA);
                     }
 
                     // Apply Stun B
                     if (forceB > threshB && bRatio > 0.3) {
-                        let stunFrames = Math.floor(forceB * 8);  // multiplier
-                        if (stunFrames < 10) stunFrames = 10; // minimum
-                        if (stunFrames > 60) stunFrames = 60; // duration
+                        let stunFrames = Math.floor(Math.pow(forceA, 2.0) * 6);  // multiplier
+                        if (stunFrames > 120) stunFrames = 120;
                         applyStun(b, stunFrames, forceB);
                     }
                 }
