@@ -199,7 +199,7 @@ const Playoffs = {
                 // Handling Timers (Goals, Whistles, etc.)
                 if (this.watchMode) {
                     if (whistleEndTimer && now >= whistleEndTimer) {
-                        whistleEndTimer = null; doFaceoffReset();
+                        whistleEndTimer = null; doFaceoffReset(nextFaceoffSpot.x, nextFaceoffSpot.y);
                     }
                     else if (goalResetTimer && now >= goalResetTimer) {
                         goalResetTimer = null; 
@@ -217,7 +217,7 @@ const Playoffs = {
                     if (faceoffPauseUntil) faceoffPauseUntil -= 16;
 
                     if (whistleEndTimer && whistleEndTimer <= performance.now()) {
-                        whistleEndTimer = null; doFaceoffReset();
+                        whistleEndTimer = null; doFaceoffReset(nextFaceoffSpot.x, nextFaceoffSpot.y);
                     }
                     if (goalResetTimer && goalResetTimer <= performance.now()) {
                         goalResetTimer = null; 
@@ -239,30 +239,13 @@ const Playoffs = {
                 }
             } 
             else {
-                // Standard Gameplay
-                puck.update();
-                if (typeof updateDroppedSticks === 'function') updateDroppedSticks();
-                checkOffsides();
-                checkDeadPuck();
-                resolveGoalCollisions(puck);
-                checkGoalieHarassment();
-                checkNetPinning();
-                if (puckEscapedRink()) handlePuckEscape();
-                if (puckStealCooldown > 0) puckStealCooldown--;
-                checkGoal();
-                if (detectPuckStuckInNet()) { 
-                    whistle("Net Mesh Stoppage"); 
-                    if(this.watchMode) break; 
-                }
+                // Standard Gameplay (Engine Integration)
+                Engine.stepGameFrame();
 
-                for (const p of players) {
-                    updatePlayer(p);
-                    resolveGoalCollisions(p);
-                    blockPlayerFromGoal(p);
-                    enforcePlayerWalls(p);
-                }
-                resolvePlayerCollisions();
+                // Check for Mesh Stoppage (Engine handles the whistle, we just need to break the loop if watching)
+                if (this.watchMode && isResetActive()) break;
 
+                // Timer Logic (MUST REMAIN HERE for Period Ends)
                 timeRemaining -= (1/60); 
                 if (timeRemaining <= 0) this.handlePeriodEndWarp();
             }

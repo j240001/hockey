@@ -31,7 +31,7 @@
 <body>
 <canvas id="game" width="1000" height="600"></canvas>
 
-
+<script src="engine.js"></script>
 <script src="helpers.js"></script>
 <script src="strategies.js"></script>
 <script src="tournament.js"></script>
@@ -86,10 +86,10 @@
 // bt17 = PHI
 // bt18 = NYR
 
-// This version 2510 attempts to add a dynamic audience
+// This version 2700 attempts to restructure the game engine itself
 
-// To get realistic amounts of shots and goals per game
-// set periods to 240 seconds and set net_h to 32
+// The purpose is to eliminate multiple engines in tournament and playoff games
+
 
 
 
@@ -143,12 +143,20 @@ let OPT_SKATERS = 5;         // Default
 let OPT_HUMAN_TEAM = -1;     // 0 = Blue, 1 = Red, -1 = Watch Mode
 let OPT_HUMAN_POS = 0;       // 0=Center, 1=RW, 2=LD, 3=LW, 4=RD (Matches Build Order)
 
+let RULE_OFFSIDES = true;
+let RULE_ICING = true;
+
+
 let optionsIndex = 0;        
 // *** UPDATE THIS LIST TO INCLUDE "POSITION" ***
-const optionsItems = ["Skaters", "Human Team", "Position", "Blue Strategy", "Red Strategy", "Back"];
+const optionsItems = ["Skaters", "Human Team", "Position", "Blue Strategy", "Red Strategy", "Offsides", "Icing", "Back"];
 
 // Helper for display names
 const POS_NAMES = ["Center", "Right Wing", "Left Defense", "Left Wing", "Right Defense"];
+
+
+
+
 
 
 let isManualReplay = false; // Tracks if we are in the infinite loop mode
@@ -167,6 +175,18 @@ let trainingTimeoutId = null; // To track and stop the fast loop
 // ==============================
 
 let SHOW_DEBUG_OVERLAY = true;
+
+
+// ==========================================
+// STATS OVERLAY GLOBALS
+// ==========================================
+let SHOW_STATS_OVERLAY = false;
+
+const LiveStats = {
+    attackTime: { vis: 0, home: 0 },
+    hits: { vis: 0, home: 0 }
+};
+
 
 let isPaused = false;
 // BT8 PASSING STATS
@@ -397,6 +417,16 @@ function fullGameReset(preserveTeams = false) {
     timeRemaining = GAME_DURATION_SECONDS;
     lastGameTimeUpdate = performance.now();
 
+
+    // *** RESET GAME STATS ***
+    if (typeof LiveStats !== 'undefined') {
+        LiveStats.attackTime.vis = 0;
+        LiveStats.attackTime.home = 0;
+        LiveStats.hits.vis = 0;
+        LiveStats.hits.home = 0;
+    }
+    // *****************************
+
     // =========================================================
     // *** RANDOMIZE TEAMS (CONDITIONAL) ***
     // =========================================================
@@ -437,6 +467,8 @@ function fullGameReset(preserveTeams = false) {
     resetPlayersToSpawn();
     startFaceoffPause();
 }
+
+
 
 
 
@@ -743,10 +775,10 @@ function drawOptionsMenu() {
     ctx.textBaseline = "middle";
 
     ctx.fillStyle = "#fff";
-    ctx.font = "40px Arial";
+    ctx.font = "30px Arial";
     ctx.fillText("GAME SETUP", W / 2, 80);
 
-    ctx.font = "24px Arial";
+    ctx.font = "20px Arial";
     
     // Helper to get names safely
     const keys = Object.keys(Strategies);
@@ -757,7 +789,7 @@ function drawOptionsMenu() {
     const name1 = s1 ? `${s1.teamName}` : "None";
 
     // 1. Skaters
-    ctx.fillStyle = (optionsIndex === 0) ? "#2255ff" : "#bbb";
+    ctx.fillStyle = (optionsIndex === 0) ? "#00d" : "#bbb";
     ctx.fillText(`Skaters: < ${OPT_SKATERS} >`, W / 2, 160);
 
     // 2. Human Team
@@ -765,35 +797,45 @@ function drawOptionsMenu() {
     if (OPT_HUMAN_TEAM === 0) teamName = "Play on AWAY team";
     if (OPT_HUMAN_TEAM === 1) teamName = "Play on HOME team";
     
-    ctx.fillStyle = (optionsIndex === 1) ? "#2255ff" : "#bbb";
+    ctx.fillStyle = (optionsIndex === 1) ? "#00d" : "#bbb";
     ctx.fillText(`Control: < ${teamName} >`, W / 2, 210);
 
     // 3. Position (Only show if Human is playing)
     if (OPT_HUMAN_TEAM !== -1) {
-        ctx.fillStyle = (optionsIndex === 2) ? "#2255ff" : "#bbb";
+        ctx.fillStyle = (optionsIndex === 2) ? "#00d" : "#bbb";
         // Safety clamp just in case
         if (OPT_HUMAN_POS >= OPT_SKATERS) OPT_HUMAN_POS = OPT_SKATERS - 1;
         const pName = POS_NAMES[OPT_HUMAN_POS] || "Unknown";
-        ctx.fillText(`My Pos: < ${pName} >`, W / 2, 260);
+        ctx.fillText(`My Pos: < ${pName} >`, W / 2, 240);
     } else {
         ctx.fillStyle = "#555";
-        ctx.fillText(`(Watch Mode Active)`, W / 2, 260);
+        ctx.fillText(`(Watch Mode Active)`, W / 2, 240);
     }
 
     // 4. Blue Strategy
-    ctx.fillStyle = (optionsIndex === 3) ? "#2255ff" : "#bbb";
-    ctx.fillText(`Away: < ${name0} >`, W / 2, 330);
+    ctx.fillStyle = (optionsIndex === 3) ? "#00d" : "#bbb";
+    ctx.fillText(`Away Team: < ${name0} >`, W / 2, 280);
 
     // 5. Red Strategy
-    ctx.fillStyle = (optionsIndex === 4) ? "#ff2222" : "#bbb";
-    ctx.fillText(`Home: < ${name1} >`, W / 2, 380);
+    ctx.fillStyle = (optionsIndex === 4) ? "#00d" : "#bbb";
+    ctx.fillText(`Home Team: < ${name1} >`, W / 2, 320);
 
-    // 6. Back
-    ctx.fillStyle = (optionsIndex === 5) ? "#fff" : "#bbb";
-    ctx.fillText("START GAME", W / 2, 460);
+    // *** 6. Offsides Toggle ***
+    ctx.fillStyle = (optionsIndex === 5) ? "#00d" : "#bbb";
+    const offText = RULE_OFFSIDES ? "ON" : "OFF";
+    ctx.fillText(`Offsides: < ${offText} >`, W / 2, 380);
+
+    // *** 7. Icing Toggle ***
+    ctx.fillStyle = (optionsIndex === 6) ? "#00d" : "#bbb";
+    const icingText = RULE_ICING ? "ON" : "OFF";
+    ctx.fillText(`Icing: < ${icingText} >`, W / 2, 420);
+
+    // 8. Back Button (Moved down)
+    ctx.fillStyle = (optionsIndex === 7) ? "#00d" : "#bbb";
+    ctx.fillText("START GAME", W / 2, 460); // Adjusted Y position
     
     ctx.fillStyle = "#666";
-    ctx.font = "16px Arial";
+    ctx.font = "14px Arial";
     ctx.fillText("Left/Right to Change | Enter to Select", W / 2, H - 40);
 }
 
@@ -848,10 +890,17 @@ function handleOptionsInput(e) {
         if (optionsIndex === 4 && total > 0) { // Red Strategy
             team1Index = (team1Index + dir + total) % total;
         }
+
+        if (optionsIndex === 5) { // Offsides
+            RULE_OFFSIDES = !RULE_OFFSIDES;
+        }
+        if (optionsIndex === 6) { // Icing
+            RULE_ICING = !RULE_ICING;
+        }
     }
 
     if (e.key === "Enter") {
-        if (optionsIndex === 5) { // Start/Back Button
+        if (optionsIndex === 7) { // Start/Back Button
             // preserveTeams = TRUE (Keep my manual selections!)
             startGame(false, true); 
         }
@@ -961,6 +1010,11 @@ const SKATER_SPECS = {
 };
 
 
+
+
+
+
+
 // =========================================================
 // FACEOFF PLAYBOOKS (Relative to the Dot)
 // =========================================================
@@ -999,6 +1053,9 @@ const FACEOFF_STRATEGIES = {
     // Fallback
     "default": { x: -100, y: 0, facing: "puck" }
 };
+
+
+
 
 
 let waitingForFaceoffDrop = false; // Triggers the puck shove logic
@@ -1164,12 +1221,11 @@ document.addEventListener("keydown", e => {
 });
 
 document.addEventListener("keydown", e => {
-    if (e.key === 'i') {
-        // console.log("Inputs for player 1:", buildAIInputs(players[0]));
-    }
-    if (e.key === 'o') {
-        const ins = buildAIInputs(players[0]);
-        // console.log("Outputs for player 1:", aiForwardPass(ins, players[0].brain));
+    if (e.key === 'i' || e.key === 'I') {
+        // If we are playing (not paused/replay), toggle the Stats Window
+        if (!isPaused && !isReplaying) {
+            SHOW_STATS_OVERLAY = !SHOW_STATS_OVERLAY;
+        }
     }
 });
 
@@ -1320,13 +1376,13 @@ document.addEventListener("keydown", (e) => {
         const t0Count = players.filter(p => p.team === 0 && p.type === "skater").length;
         const t1Count = players.filter(p => p.team === 1 && p.type === "skater").length;
 
-        // --- TEAM 0 (BLUE) ---
+        // --- TEAM 0 ---
         // Key 1: Queue Removal (-1 Player)
         if (e.key === "1") {
             // Check: (Current Count) + (Pending Changes) - 1 must be > Min
             if (t0Count + pendingRosterChanges.team0 > MIN_SKATERS) {
                 pendingRosterChanges.team0--;
-                // console.log("Queueing Blue Removal. Pending:", pendingRosterChanges.team0);
+                // console.log("Visitor Skater Removed. Pending:", pendingRosterChanges.team0);
             }
         }
         // Key 2: Queue Add (+1 Player)
@@ -1334,23 +1390,23 @@ document.addEventListener("keydown", (e) => {
             // Check: (Current Count) + (Pending Changes) + 1 must be < Max
             if (t0Count + pendingRosterChanges.team0 < MAX_SKATERS) {
                 pendingRosterChanges.team0++;
-                // console.log("Queueing Blue Add. Pending:", pendingRosterChanges.team0);
+                // console.log("Visitor Skater Added. Pending:", pendingRosterChanges.team0);
             }
         }
 
-        // --- TEAM 1 (RED) ---
+        // --- TEAM 1 ---
         // Key 9: Queue Removal (-1 Player)
         if (e.key === "9") {
             if (t1Count + pendingRosterChanges.team1 > MIN_SKATERS) {
                 pendingRosterChanges.team1--;
-                // console.log("Queueing Red Removal. Pending:", pendingRosterChanges.team1);
+                // console.log("Home Skater Removed. Pending:", pendingRosterChanges.team1);
             }
         }
         // Key 0: Queue Add (+1 Player)
         if (e.key === "0") {
             if (t1Count + pendingRosterChanges.team1 < MAX_SKATERS) {
                 pendingRosterChanges.team1++;
-                // console.log("Queueing Red Add. Pending:", pendingRosterChanges.team1);
+                // console.log("Home Skater Added. Pending:", pendingRosterChanges.team1);
             }
         }
 
@@ -1451,11 +1507,45 @@ const RY = RINK_Y + RINK_H/2; // 320
 
 let team0AttacksRight = true;  // Flip on every period end
 
+
+
 // ——————————————————————————————————————————————
 // CRITICAL FIX: ALL PLAYER C HELPERS — MUST BE HERE
 // ——————————————————————————————————————————————
 const LEFT_BLUE_LINE  = RX - 110;
 const RIGHT_BLUE_LINE = RX + 110;
+
+
+
+
+
+// =========================================================
+// FACEOFF LOCATIONS (Geometry Definitions)
+// =========================================================
+const DOTS = {
+    CENTER: { x: RX, y: RY },
+
+    // NEUTRAL ZONE (Outside Blue Lines)
+    // Your Blue Lines are at RX +/- 110. Dots should be approx +/- 135
+    NZ_TOP_LEFT:    { x: RX - 91, y: RY - 89 },
+    NZ_BOT_LEFT:    { x: RX - 91, y: RY + 89 },
+    NZ_TOP_RIGHT:   { x: RX + 91, y: RY - 89 },
+    NZ_BOT_RIGHT:   { x: RX + 91, y: RY + 89 },
+
+    // END ZONES (Inside Circles)
+    // Goals are at RX +/- 325. Dots usually ~20-30px from goal line?
+    // Let's estimate them at +/- 265
+    EZ_TOP_LEFT:    { x: RX - 258, y: RY - 89 }, // Defending Zone Team 0
+    EZ_BOT_LEFT:    { x: RX - 258, y: RY + 89 },
+    EZ_TOP_RIGHT:   { x: RX + 258, y: RY - 89 }, // Defending Zone Team 1
+    EZ_BOT_RIGHT:   { x: RX + 258, y: RY + 89 }
+};
+
+
+let nextFaceoffSpot = DOTS.CENTER; // Default to Center
+
+
+
 
 function getPuckZone(team) {
     const dl = defendsLeft(team);  // *** NEW ***
@@ -2200,9 +2290,11 @@ function handlePuckEscape() {
     // Don't double-trigger while resetting
     if (goalResetTimer) return;
 
-    // console.warn("Puck escaped rink — resetting.");
-    
-    whistle("Puck Out of Play")
+    // 1. Ask the Helper where the faceoff should be
+    const spot = resolveOutOfPlaySpot();
+
+    // 2. Blow the whistle with the correct spot
+    whistle("Puck Out of Play", spot);
 }
 
 
@@ -2262,32 +2354,44 @@ function resetPlayersToSpawn() {
 
 
 
-function whistle(reason, durationMs = 2000) {
-    // Prevent triggering a new pause if the game is already stopped by a goal or whistle.
+function whistle(reason, location = DOTS.CENTER, durationMs = 2000) {
     if (isResetActive()) return; 
 
-    // +++ AUDIO TRIGGER +++
     const soundKey = (Math.random() < 0.5) ? 'whistle_1' : 'whistle_2';
     playGameSound(soundKey, 0.7);
 
-    // Reset current state variables that conflict with the whistle.
     const owner = getPlayerById(puck.ownerId);
     if (owner) {
-        puck.ownerId = null; // Release the puck
-        puck.vx = 0;
-        puck.vy = 0;
+        puck.ownerId = null; 
+        puck.vx = 0; puck.vy = 0;
     }
     
-    // Set the whistle state
+    // ==========================================
+    // 1. CRITICAL FIX: CLEAR RULES ENGINE
+    // ==========================================
+    // Turn off the alarm immediately
+    offsideState.active = false;
+    offsideState.team = null;
+    offsideState.warningTimer = 0;
+    
+    // Reset Icing Memory
+    if (typeof icingState !== 'undefined') {
+        icingState.processed = false;
+        icingState.lastTouchTeam = -1;
+    }
+
+    // ==========================================
+    // 2. SET UP NEXT PLAY
+    // ==========================================
+    nextFaceoffSpot = location; 
+ 
     whistleMessage = reason;
     whistleEndTimer = performance.now() + durationMs; 
     
-    // Clear the goalie freeze timer, as the possession is ending
     goalieHoldFrames = 0; 
-    
-    // The actual faceoff will occur when 'loop' detects whistleEndTimer has passed.
-    // console.log("WHISTLE:", reason);
 }
+
+
 
 
 function checkNetPinning() {
@@ -3198,21 +3302,83 @@ function resolvePlayerCollisions() {
                 if (aHits) threshA = 5.0; 
                 if (bHits) threshB = 5.0; 
 
-                // 6. APPLY OUTCOMES
+                // 6. APPLY OUTCOMES (Three-Tier Physicality)
                 if (a.team !== b.team) {
                     
-                    // CHECK PLAYER A
+                    const KNOCKBACK_SCALAR = 0.15; 
+                    const STUN_THRESHOLD = 4.0;      // Tier 1: Big Hit
+                    const PUCK_LOSS_THRESHOLD = 2.5; // Tier 2: Jar Loose
+
+                    // --- CHECK PLAYER A (Collision Force on A) ---
                     if (forceA > threshA) {
-                        let frames = Math.floor(Math.pow(forceA, 2.0) * 6);
-                        if (frames > 120) frames = 120;
-                        applyStun(a, frames, forceA);
+                        
+                        // TIER 1: DESTRUCTION (Force > 4.0)
+                        if (forceA >= STUN_THRESHOLD) {
+                            let frames = Math.floor(Math.pow(forceA, 2.0) * 6);
+                            if (frames > 120) frames = 120;
+                            
+                            // Stun + Stat + Drop Puck (Handled inside)
+                            applyStun(a, frames, forceA, b); 
+
+                            // Knockback
+                            a.vx -= nx * (forceA * KNOCKBACK_SCALAR);
+                            a.vy -= ny * (forceA * KNOCKBACK_SCALAR);
+                        }
+                        
+                        // TIER 2: JAR PUCK (Force 2.5 - 4.0)
+                        else if (forceA >= PUCK_LOSS_THRESHOLD) {
+                            // Player keeps footing (no stun), but loses puck
+                            if (puck.ownerId === a.id) {
+                                ejectPuckFromOwner(a);
+                                // Add a "pop" to the puck so it doesn't just sit dead
+                                puck.vx += (Math.random() - 0.5) * 2; 
+                                puck.vy += (Math.random() - 0.5) * 2;
+                                puckStealCooldown = 15; // Brief scramble period
+                            }
+                            // Moderate slow down
+                            a.vx *= 0.6; 
+                            a.vy *= 0.6;
+                        }
+
+                        // TIER 3: INTERFERENCE (Force < 2.5)
+                        else {
+                            // Just a rub-out / slowing down
+                            a.vx *= 0.85; 
+                            a.vy *= 0.85;
+                        }
                     }
 
-                    // CHECK PLAYER B
+                    // --- CHECK PLAYER B (Collision Force on B) ---
                     if (forceB > threshB) {
-                        let frames = Math.floor(Math.pow(forceB, 2.0) * 6);
-                        if (frames > 120) frames = 120;
-                        applyStun(b, frames, forceB);
+                        
+                        // TIER 1: DESTRUCTION
+                        if (forceB >= STUN_THRESHOLD) {
+                            let frames = Math.floor(Math.pow(forceB, 2.0) * 6);
+                            if (frames > 120) frames = 120;
+                            
+                            applyStun(b, frames, forceB, a); 
+
+                            b.vx += nx * (forceB * KNOCKBACK_SCALAR);
+                            b.vy += ny * (forceB * KNOCKBACK_SCALAR);
+                        }
+                        
+                        // TIER 2: JAR PUCK
+                        else if (forceB >= PUCK_LOSS_THRESHOLD) {
+                            if (puck.ownerId === b.id) {
+                                ejectPuckFromOwner(b);
+                                puck.vx += (Math.random() - 0.5) * 2; 
+                                puck.vy += (Math.random() - 0.5) * 2;
+                                puckStealCooldown = 15; 
+                            }
+                            b.vx *= 0.6; 
+                            b.vy *= 0.6;
+                        }
+
+                        // TIER 3: INTERFERENCE
+                        else {
+                            b.vx *= 0.85; 
+                            b.vy *= 0.85;
+                        }
                     }
                 }
             }
@@ -3225,19 +3391,33 @@ function resolvePlayerCollisions() {
 
 
 // Helper to apply stun and puck loss cleanly
-function applyStun(p, frames, force) {
+function applyStun(p, frames, force, attacker) { // <--- Added 'attacker'
+    
+    // 1. HIT STATS TRACKING
+    // We check this FIRST, before the puck is ejected below.
+    if (typeof LiveStats !== 'undefined' && attacker) {
+        
+        const HIT_STAT_THRESHOLD = 6.0; // Only count hard hits
+        
+        // Condition: Victim (p) has the puck AND hit was hard enough
+        if (puck.ownerId === p.id && force > HIT_STAT_THRESHOLD) {
+            if (attacker.team === 0) LiveStats.hits.vis++;
+            else                     LiveStats.hits.home++;
+        }
+    }
+
+    // 2. APPLY STUN
     p.stunTimer = frames;
-    p.stunRot = (Math.random() < 0.5 ? 0.02 : -0.02);
+    const spinDir = (Math.random() < 0.5 ? 1 : -1);
+    p.stunRot = (0.02 + (force * 0.015)) * spinDir;
+    p.recoveryTimer = frames + 20;
 
-    p.recoveryTimer = frames + 20; // duration
-
-    // --- DROP STICK MECHANIC (Updated) ---
+    // 3. DROP STICK MECHANIC
     if (force > 7.6 && !p.stickDropped) {
-        // Call the Global Physics Spawner
         spawnDroppedStick(p);
     }
 
-    // Puck Ejection (Unchanged)
+    // 4. PUCK EJECTION
     if (puck.ownerId === p.id) {
         ejectPuckFromOwner(p);
         const popScale = 1.0 + force * 1.5;
@@ -3541,7 +3721,7 @@ function updateHumanSkater(p) {
     // =========================================================
     if (p.stunTimer > 0) {
         p.stunTimer--;
-        p.vx *= 0.95; p.vy *= 0.95;
+        p.vx *= 0.96; p.vy *= 0.96;
         p.x += p.vx; p.y += p.vy;
         p.angle += (p.stunRot || 0.2);
         p.visualBodyAngle = p.angle; 
@@ -4356,7 +4536,7 @@ function spawnDroppedStick(p) {
     }
 
     // 2. Initialize "Accident" Physics
-    const slideSpeed = 1.5 + Math.random() * 1.5; 
+    const slideSpeed = 0.1 + Math.random() * 0.3; 
     const slideDir = Math.random() * Math.PI * 2;
 
     const stick = {
@@ -4366,7 +4546,7 @@ function spawnDroppedStick(p) {
         
         vx: Math.cos(slideDir) * slideSpeed,
         vy: Math.sin(slideDir) * slideSpeed,
-        vRot: (Math.random() - 0.2) * 0.05,
+        vRot: (Math.random() - 0.15) * 0.03,
         
         ownerId: p.id,       
         handing: p.handing,  
@@ -4787,8 +4967,7 @@ function updateAISkater(p) {
     if (p.stunTimer > 0) {
         // --- STUNNED BEHAVIOR ---
         p.stunTimer--;
-        p.vx *= 0.95; 
-        p.vy *= 0.95;
+        p.vx *= 0.96; p.vy *= 0.96;
         p.x += p.vx; 
         p.y += p.vy;
         
@@ -6079,8 +6258,8 @@ function drawBroadcastScoreboard() {
         
         // Optional: Show specific details
         let detail = "";
-        if (pendingRosterChanges.team0 !== 0) detail += `Blue: ${pendingRosterChanges.team0 > 0 ? '+' : ''}${pendingRosterChanges.team0} `;
-        if (pendingRosterChanges.team1 !== 0) detail += `Red: ${pendingRosterChanges.team1 > 0 ? '+' : ''}${pendingRosterChanges.team1}`;
+        if (pendingRosterChanges.team0 !== 0) detail += `Visitor: ${pendingRosterChanges.team0 > 0 ? '+' : ''}${pendingRosterChanges.team0} `;
+        if (pendingRosterChanges.team1 !== 0) detail += `Home: ${pendingRosterChanges.team1 > 0 ? '+' : ''}${pendingRosterChanges.team1}`;
         
         ctx.font = "12px Arial";
         ctx.fillText(detail, W/2, 130);
@@ -6144,6 +6323,62 @@ function drawScoreboard() {
 }
 
 
+
+
+function drawStatsOverlay() {
+    if (!SHOW_STATS_OVERLAY) return;
+
+    // 1. Setup Window Dimensions (Your Custom Size)
+    const boxW = 300; 
+    const boxH = 120; 
+    const margin = 10;
+    const x = W - boxW - margin; 
+    const y = margin;
+
+    ctx.save();
+
+    // 2. Draw Background
+    ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
+    ctx.fillRect(x, y, boxW, boxH);
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x, y, boxW, boxH);
+
+    // 3. Header
+    ctx.fillStyle = "#aaa";
+    ctx.font = "11px Arial";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillText("ATTACK ZONE TIME", x + 10, y + 10); // Changed Label
+
+    // Separator
+    ctx.strokeStyle = "#444";
+    ctx.beginPath(); ctx.moveTo(x + 10, y + 28); ctx.lineTo(x + boxW - 10, y + 28); ctx.stroke();
+
+    // 4. Data Rows
+    ctx.font = "12px Monospace";
+    const fmt = (sec) => {
+        const m = Math.floor(sec / 60);
+        const s = Math.floor(sec % 60);
+        return `${m}:${s.toString().padStart(2, '0')}`;
+    };
+
+    let rowY = y + 40;
+    const gap = 20;
+
+    // VISITOR ROW (Attack Time)
+    ctx.fillStyle = "#fff"; 
+    // Label: AWAY ATTACK
+    ctx.fillText(`AWAY: ${fmt(LiveStats.attackTime.vis)}   HITS: ${LiveStats.hits.vis}`, x + 10, rowY);
+    
+    // HOME ROW (Attack Time)
+    rowY += gap;
+    ctx.fillStyle = "#fff";
+    // Label: HOME ATTACK
+    ctx.fillText(`HOME: ${fmt(LiveStats.attackTime.home)}   HITS: ${LiveStats.hits.home}`, x + 10, rowY);
+
+    ctx.restore();
+}
 
 
 
@@ -6379,6 +6614,29 @@ function createMasterCrowd() {
             // Late arrival sequence fix (30% as settled)
             isLate: Math.random() < 0.30, 
 
+
+            // =============================================
+            // *** NEW: WAVE PERSONALITY TRAITS ***
+            // =============================================
+            
+            // 1. PARTICIPATION:
+            // Must be a Home Fan AND pass an 80% enthusiasm check.
+            // If false, they will never stand for the wave.
+            waveActive: isHomeFan && (Math.random() < 0.80),
+
+            // 2. TIMING VARIANCE (The "Messy" Factor):
+            // We add a random offset to their X position for the wave calculation.
+            // Range: -40 to +40 pixels. 
+            // Negative = Early/Anticipating. Positive = Late/Slow reaction.
+            waveOffset: (Math.random() - 0.5) * 80,
+
+            // 3. EFFORT LEVEL:
+            // 1.0 = Full Stand. 0.3 = Barely lifts butt off seat.
+            // We favor higher effort (0.6 to 1.1) but allow for lazy fans.
+            waveEffort: 0.5 + (Math.random() * 0.6),
+            
+            // =============================================
+
             fidgetX: 0, 
             fidgetY: 0, 
             fidgetAngle: 0
@@ -6475,11 +6733,17 @@ function doFaceoffReset(dotX = RX, dotY = RY) {
     puck.vx = 0; puck.vy = 0;
     puck.x = dotX; 
     puck.y = dotY;
+    puck.prevX = dotX; 
 
     droppedSticks = []; // Clear the ice
 
     // 2. FLAG THE DROP (New)
     waitingForFaceoffDrop = true;
+
+    // Clear existing offside conditions
+    offsideState.active = false;
+    offsideState.team = null;
+    offsideState.warningTimer = 0;
 
     // 3. CROWD & LOGIC (Existing)
     if (currentPeriod > 1 || timeRemaining < GAME_DURATION_SECONDS) {
@@ -7284,21 +7548,20 @@ let lastCrowdUpdate = 0;
 function updateLivingCrowd() {
     const now = performance.now();
     
-    // 1. THROTTLE: Only update every 120ms (approx 8 times a second)
-    // This locks the crowd animation speed to real time, not frame rate.
+    // 1. THROTTLE (Time-based update)
     if (now - lastCrowdUpdate < 120) return;
-    
     lastCrowdUpdate = now;
 
-    // 2. TRIGGER CONDITIONS (The Wave / Fidgets)
-    const isThirdPeriod = (typeof currentPeriod !== 'undefined' && currentPeriod === 3); 
-    const homeTeamLeadByThree = (typeof scoreTeam1 !== 'undefined' && typeof scoreTeam0 !== 'undefined' && scoreTeam1 - scoreTeam0 >= 3);
+    // 2. TRIGGER CONDITIONS
+    // Condition: 3rd Period AND Home Team leads by 3+ goals
+    const isThirdPeriod = (typeof currentPeriod !== 'undefined' && currentPeriod >= 3); 
+    const isBigHomeLead = (typeof scoreTeam1 !== 'undefined' && typeof scoreTeam0 !== 'undefined' && scoreTeam1 - scoreTeam0 >= 3);
 
-    // Note: executeTheWave() must exist in your crowd_data.js or similar
-    if (isThirdPeriod && homeTeamLeadByThree && typeof executeTheWave === 'function') {
+    // Note: We check if 'executeTheWave' exists before calling it
+    if (isThirdPeriod && isBigHomeLead && typeof executeTheWave === 'function') {
         executeTheWave();
     } else {
-        // Run Standard Fidgets
+        // Run Standard Fidgets (Only when NOT waving)
         if (typeof masterCrowd !== 'undefined') {
             masterCrowd.forEach(fan => {
                 let currentExcitement = fan.isHome ? team1Excitement : team0Excitement;
@@ -7317,6 +7580,81 @@ function updateLivingCrowd() {
     // 3. REDRAW
     if (typeof generateCrowd === 'function' && typeof currentDisappointment !== 'undefined') {
         generateCrowd(currentDisappointment);
+    }
+}
+
+
+
+function executeTheWave() {
+    const now = performance.now();
+    
+    // ==========================================
+    // 🎛️ WAVE TUNING KNOBS
+    // ==========================================
+    
+    // 1. DIRECTION
+    // true = Clockwise? (Depends on coordinate system)
+    // false = Counter-Clockwise? 
+    // Just toggle this if it's going the wrong way.
+    const REVERSE_DIRECTION = true; 
+
+    // 2. WAVE ROTATION SPEED (How fast it circles the rink)
+    // 0.0005 = Slow / Majestic
+    // 0.0010 = Fast / Exciting
+    // 0.0020 = Hyper Speed
+    const ROTATION_SPEED = 0.0005; 
+
+    // 3. FAN POP SPEED (How fast they stand up/sit down)
+    // This controls the "Width" of the wave.
+    // 0.60 = Wide Wave (Slow, lazy stand up)
+    // 0.80 = Normal Wave
+    // 0.90 = Narrow Wave (Very fast, snappy jump)
+    // 0.95 = Needle (Twitch)
+    const POP_THRESHOLD = 0.97; 
+
+    // ==========================================
+
+    const dir = REVERSE_DIRECTION ? -1 : 1;
+    const waveRotation = now * ROTATION_SPEED * dir;
+
+    const centerX = 500; 
+    const centerY = 300; 
+
+    if (typeof masterCrowd !== 'undefined') {
+        masterCrowd.forEach(fan => {
+            // Check Participation
+            if (!fan.waveActive || fan.hasLeft) {
+                if (fan.fidgetY < 0) fan.fidgetY = 0; 
+                return; 
+            }
+
+            // 1. Calculate Angle
+            let angle = Math.atan2(fan.y - centerY, fan.x - centerX);
+
+            // 2. Apply Messy Timing Offset
+            angle += (fan.waveOffset * 0.002);
+
+            // 3. Calculate Wave Height
+            const val = Math.sin(angle + waveRotation);
+            
+            // 4. Trigger Stand Up
+            if (val > POP_THRESHOLD) { 
+                const effort = fan.waveEffort || 1.0;
+                
+                // MATH: We need to normalize the value from [Threshold -> 1.0] to [0.0 -> 1.0]
+                // Example: If val is 0.9 and threshold is 0.8, result is 0.5 (Halfway up)
+                const range = 1.0 - POP_THRESHOLD;
+                const normalizedHeight = (val - POP_THRESHOLD) / range;
+
+                // Apply Height (-12px max)
+                fan.fidgetY = (-12 * effort) * normalizedHeight; 
+                
+                fan.fidgetX = 0;
+                fan.fidgetAngle = 0;
+            } else {
+                fan.fidgetY = 0;
+            }
+        });
     }
 }
 
@@ -7576,7 +7914,7 @@ function renderFrame() {
     // Draw New Broadcast Scoreboard
     drawBroadcastScoreboard();
 
-
+    drawStatsOverlay();
 
 
 
@@ -8212,12 +8550,10 @@ function loadAI() {
 
 
 // =========================================================
-// MAIN LOOP
+// MAIN LOOP 
 // =========================================================
 
-
 function loop(now) {
-
 
     // +++ AUDIO UPDATE +++
     updateCrowdAmbience(); 
@@ -8232,7 +8568,6 @@ function loop(now) {
 
     // 1. GLOBAL UPDATES
     updateLivingCrowd(); 
-
     checkCrowdAnticipation();
 
     const isStoppage = isResetActive() || performance.now() < faceoffPauseUntil;
@@ -8255,7 +8590,6 @@ function loop(now) {
 
     // 3. PLAYOFF GAMEPLAY (Handles Warp Speed)
     if (gameState === 'playoffs') {
-        // This is the magic line that enables the "W" key speed-up
         if (typeof Playoffs !== 'undefined') Playoffs.runGameTick(now);
         requestAnimationFrame(loop);
         return;
@@ -8288,16 +8622,14 @@ function loop(now) {
     if (gameState === 'menu') { drawMenu(); requestAnimationFrame(loop); return; }
     if (gameState === 'options') { drawOptionsMenu(); requestAnimationFrame(loop); return; }
     
-    // *** NEW: CHAMPION SCREEN HANDLER ***
+    // CHAMPION SCREEN HANDLER
     if (gameState === 'champion_screen') {
-        // Just draw the bracket (which handles the Trophy text and View Toggle)
         if (typeof Playoffs !== 'undefined') {
             Playoffs.drawBracket(ctx, W, H);
         }
         requestAnimationFrame(loop);
-        return; // <--- CRITICAL: Stops the code from falling through to physics
+        return; 
     }
-    // ************************************
 
     // GAME OVER INTERCEPT
     if (gameState === 'gameover') { 
@@ -8323,91 +8655,69 @@ function loop(now) {
     // =====================================================
     // 7. STANDARD GAMEPLAY (Exhibition Mode)
     // =====================================================
-    // This only runs if we are NOT in playoffs/tournament mode
     
+    // A. STOPPAGE / CELEBRATION LOGIC (Engine Integration)
     const isGameFlowPaused = isResetActive() || performance.now() < faceoffPauseUntil;
 
     if (isGameFlowPaused) {
         updateClock(now); 
-        if (isGoalCelebrationActive()) {
-            puck.update();
-            collideCircleWithRink(puck, puck.r, 0.8);
-            for (const p of players) { updatePlayer(p); enforcePlayerWalls(p); }
-            resolvePlayerCollisions();
-            if (goalResetTimer - now > 4000 && typeof captureReplayFrame === 'function') captureReplayFrame();
-        }
-        if (whistleEndTimer && now >= whistleEndTimer) { whistleEndTimer = null; doFaceoffReset(); } 
-        else if (goalResetTimer && now >= goalResetTimer) {
-            goalResetTimer = null; 
-            
-            // --- FIXED SUDDEN DEATH LOGIC ---
-            if (isSuddenDeathGoal) {
-                // 1. Update the final score immediately so the replay shows the winner
-                if (lastGoalTeam === 0) scoreTeam0++;
-                if (lastGoalTeam === 1) scoreTeam1++;
-                
-                // 2. Play the Replay, THEN end the game
-                if (typeof startInstantReplay === 'function') {
-                    startInstantReplay(() => { 
-                        gameState = "gameover"; // End game AFTER replay finishes
-                        isSuddenDeathGoal = false;
-                    });
-                } else {
-                    // Fallback if replay system missing
-                    gameState = "gameover"; 
-                    isSuddenDeathGoal = false; 
-                }
-            } 
-            // --- NORMAL GOAL LOGIC ---
-            else {
-                if (typeof startInstantReplay === 'function') {
-                    startInstantReplay(() => { doGoalReset(); });
-                } else {
-                    doGoalReset();
-                }
+
+        // 1. CELEBRATION PHYSICS (Delegated to Engine)
+        if (typeof isGoalCelebrationActive === 'function' && isGoalCelebrationActive()) {
+            Engine.stepCelebrationFrame(); // <--- NEW ENGINE CALL
+
+            // Keep Replay Capture here (Director Logic)
+            if (goalResetTimer - now > 4000 && typeof captureReplayFrame === 'function') {
+                captureReplayFrame();
             }
         }
+
+        // 2. TIMER MANAGEMENT (Delegated to Engine)
+        // The engine tells us *what* to do, but we (The Director) decide *how* to do it (UI/Replays).
+        const stoppageAction = Engine.handleStoppageTimers(now); 
+
+        if (stoppageAction === "SUDDEN_DEATH") {
+            // Sudden Death Logic
+            if (lastGoalTeam === 0) scoreTeam0++;
+            if (lastGoalTeam === 1) scoreTeam1++;
+            
+            if (typeof startInstantReplay === 'function') {
+                startInstantReplay(() => { 
+                    gameState = "gameover"; 
+                    isSuddenDeathGoal = false;
+                });
+            } else {
+                gameState = "gameover"; 
+                isSuddenDeathGoal = false; 
+            }
+        } 
+        else if (stoppageAction === "GOAL_RESET") {
+            // Standard Goal Logic
+            if (typeof startInstantReplay === 'function') {
+                startInstantReplay(() => { doGoalReset(); });
+            } else {
+                doGoalReset();
+            }
+        }
+        // Note: "RESET_DONE" and "CONTINUE" need no action from the Director
+
         if (!TRAINING_MODE || WATCH_MODE) renderFrame();
         requestAnimationFrame(loop);
         return;
     }
 
-    // Active Physics
+
+
+    // B. ACTIVE PHYSICS (Replaced with Engine.js)
     const safeReplayCheck = (typeof isReplaying !== 'undefined') ? !isReplaying : true;
     if (!TRAINING_MODE && safeReplayCheck) {
 
+        // *** STEP 2: SURGICAL REPLACEMENT ***
+        // We delegate all movement, collisions, and rules to the Engine.
+        Engine.stepGameFrame(); 
 
-        processFaceoffDrop();
-
-        puck.update();
-
-        
-
-        updateDroppedSticks(); // <--- NEW
-
-        checkOffsides();
-        checkDeadPuck(); 
-        resolveGoalCollisions(puck);
-        checkGoalieHarassment();
-        checkNetPinning(); 
-        if (puckEscapedRink()) handlePuckEscape();
-        if (puckStealCooldown > 0) puckStealCooldown--;
-        checkGoal(); 
-        
-        if (detectPuckStuckInNet()) {
-            whistle("Net Mesh Stoppage"); 
-            if (!TRAINING_MODE || WATCH_MODE) renderFrame();
-            requestAnimationFrame(loop);
-            return; 
-        }
-        
-        for (const p of players) {
-            updatePlayer(p);
-            resolveGoalCollisions(p);
-            blockPlayerFromGoal(p);  
-            enforcePlayerWalls(p);
-        }
-        resolvePlayerCollisions();
+        // We keep Replay Capture here because the Engine handles simulation,
+        // but the Loop handles recording/rendering.
         if (typeof captureReplayFrame === 'function') captureReplayFrame();
     }
 
@@ -8446,8 +8756,8 @@ if (isResetActive()) {
     
     // Check 1: Whistle expired
     if (whistleEndTimer && now >= whistleEndTimer) {
-        whistleEndTimer = null; // <-- ADD THIS LINE
-        doFaceoffReset();
+        whistleEndTimer = null; 
+        doFaceoffReset(nextFaceoffSpot.x, nextFaceoffSpot.y);
     } 
     // Check 2: Goal expired
     else if (goalResetTimer && now >= goalResetTimer) {
@@ -8462,33 +8772,18 @@ if (isResetActive()) {
 
 
     for (let i = 0; i < STEPS_PER_TICK; i++) {
-        puck.update();
-        checkOffsides();
-        checkGoalieHarassment();
-        checkNetPinning(); 
+        
+        // 1. Run Physics Engine
+        Engine.stepGameFrame();
 
-        // *** NEW: SOLID GOAL COLLISION ***
-        resolveGoalCollisions(puck);
-
-        if (puckEscapedRink()) handlePuckEscape();
-
+        // 2. Training Specific Logic (Rewards/Termination)
+        // We pass the current time to allow SPS calculation
         trainingTick(performance.now());
         trainingAutoEnd();
 
-        if (puckStealCooldown > 0) puckStealCooldown--;
-
-        checkGoal();
-        
-        // If a whistle/goal was triggered during this tick, break the loop early
+        // 3. Break loop if Stoppage occurred
+        // (The Engine handles the whistle/goal logic internally)
         if (isResetActive()) break; 
-
-        for (const p of players) {
-            updatePlayer(p);
-            enforcePlayerWalls(p);
-            // keepSkatersOutOfNet(p);
-        }
-
-        resolvePlayerCollisions();
     }
 
     ticksSinceLastGoal++;
@@ -9166,7 +9461,6 @@ window.addEventListener('keydown', () => {
 
 </body>
 </html>
-
 
 
 

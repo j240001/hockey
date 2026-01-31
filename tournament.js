@@ -199,7 +199,7 @@ startNextMatch: function() {
             if (isResetActive() || performance.now() < faceoffPauseUntil) {
                 if (this.watchMode) {
                     const now = performance.now();
-                    if (whistleEndTimer && now >= whistleEndTimer) { whistleEndTimer = null; doFaceoffReset(); }
+                    if (whistleEndTimer && now >= whistleEndTimer) { whistleEndTimer = null; doFaceoffReset(nextFaceoffSpot.x, nextFaceoffSpot.y); }
                     if (goalResetTimer && now >= goalResetTimer) { 
                         if (isSuddenDeathGoal) {
                              if (lastGoalTeam === 0) scoreTeam0++;
@@ -216,7 +216,7 @@ startNextMatch: function() {
                     }
                 } 
                 else {
-                    if (whistleEndTimer) { whistleEndTimer = null; doFaceoffReset(); }
+                    if (whistleEndTimer) { whistleEndTimer = null; doFaceoffReset(nextFaceoffSpot.x, nextFaceoffSpot.y); }
                     if (goalResetTimer) { 
                         if (isSuddenDeathGoal) { }
                         else { doGoalReset(); }
@@ -225,27 +225,8 @@ startNextMatch: function() {
                 }
             } 
             else {
-                // VISUAL PHYSICS STEP
-                puck.update();
-                if (typeof updateDroppedSticks === 'function') updateDroppedSticks();
-                checkOffsides();
-                checkDeadPuck();
-                
-                checkGoal(); 
-                resolveGoalCollisions(puck);
-                
-                checkGoalieHarassment();
-                checkNetPinning();
-                if (puckEscapedRink()) handlePuckEscape();
-                if (puckStealCooldown > 0) puckStealCooldown--;
-                
-                for (const p of players) {
-                    updatePlayer(p);
-                    resolveGoalCollisions(p);
-                    blockPlayerFromGoal(p);
-                    enforcePlayerWalls(p);
-                }
-                resolvePlayerCollisions();
+                // VISUAL PHYSICS STEP (Engine Integration)
+                Engine.stepGameFrame();
             }
 
             if (!isResetActive()) {
@@ -324,35 +305,18 @@ startNextMatch: function() {
             let gameActive = true;
             
             while (gameActive) {
-                puck.update();
-                if (typeof updateDroppedSticks === 'function') updateDroppedSticks();
-                checkOffsides();
-                checkDeadPuck();
-                
-                checkGoal(); 
-                
-                if (isSuddenDeathGoal) {
+
+                // WARP PHYSICS STEP
+                Engine.stepGameFrame();
+
+                // *** RESTORED SUDDEN DEATH CHECK ***
+                if (typeof isSuddenDeathGoal !== 'undefined' && isSuddenDeathGoal) {
                     if (lastGoalTeam === 0) scoreTeam0++;
                     if (lastGoalTeam === 1) scoreTeam1++;
                     this.recordResult(false);
                     gameActive = false;
                     break; 
                 }
-
-                if (typeof resolveGoalCollisions === 'function') resolveGoalCollisions(puck);
-                
-                checkGoalieHarassment();
-                checkNetPinning();
-                if (puckEscapedRink()) handlePuckEscape();
-                if (puckStealCooldown > 0) puckStealCooldown--;
-
-                for (const p of players) {
-                    updatePlayer(p);
-                    resolveGoalCollisions(p);
-                    blockPlayerFromGoal(p);
-                    enforcePlayerWalls(p);
-                }
-                resolvePlayerCollisions();
 
                 // TIME
                 if (goalResetTimer || whistleEndTimer) {
@@ -371,7 +335,7 @@ startNextMatch: function() {
                         if (currentPeriod < TOTAL_PERIODS) {
                             currentPeriod++;
                             timeRemaining = GAME_DURATION_SECONDS;
-                            doFaceoffReset();
+                            doFaceoffReset(nextFaceoffSpot.x, nextFaceoffSpot.y);
                         } 
                         else {
                             if (scoreTeam0 === scoreTeam1 && currentPeriod >= 4) {
@@ -385,7 +349,7 @@ startNextMatch: function() {
                             } else {
                                 currentPeriod++;
                                 timeRemaining = GAME_DURATION_SECONDS;
-                                doFaceoffReset();
+                                doFaceoffReset(nextFaceoffSpot.x, nextFaceoffSpot.y);
                             }
                         }
                     }

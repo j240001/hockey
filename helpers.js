@@ -1527,6 +1527,12 @@ function applyEvasion(p, targetX, targetY) {
 // PREVENTIVE OFFSIDE CHECK FOR AI (Universal)
 // =========================================================
 function wouldBeOffside(p) {
+
+    if (typeof RULE_OFFSIDES !== 'undefined' && !RULE_OFFSIDES) {
+        return false;
+    }
+
+
     // Blue lines
     const leftLine  = RX - BLUE_LINE_OFFSET;
     const rightLine = RX + BLUE_LINE_OFFSET;
@@ -1580,49 +1586,63 @@ function wouldBeOffside(p) {
 
 
 function checkOffsides() {
-    // 1. If play is stopped, reset logic
-    if (isResetActive()) {
+
+    // 0. Global Rule Check
+    if (typeof RULE_OFFSIDES !== 'undefined' && !RULE_OFFSIDES) {
         offsideState.active = false;
         offsideState.team = null;
         return;
     }
 
-    // 2. Identify Zones
-    // Blue lines are at RX - 110 (Left) and RX + 110 (Right)
+    // 1. Stoppage Checks
+    if (typeof isResetActive === 'function' && isResetActive()) {
+        offsideState.active = false;
+        offsideState.team = null;
+        offsideState.warningTimer = 0;
+        if (typeof puck !== 'undefined') puck.prevX = puck.x;
+        return;
+    }
+    
+
+    // 2. Teleport Guard
+    const p = puck;
+    if (p.prevX !== undefined && Math.abs(p.x - p.prevX) > 100) {
+        p.prevX = p.x;
+        return;
+    }
+
+    // 3. Setup Constants
     const leftLine = RX - BLUE_LINE_OFFSET;
     const rightLine = RX + BLUE_LINE_OFFSET;
+    const RY_CENTER = (typeof RY !== 'undefined') ? RY : 300;
+    const isTop = (p.y < RY_CENTER);
 
-    // 3. Track Puck Crossing
-    // We need to know if the puck *just* entered a zone.
-    // (We rely on puck.prevX which we will set in the main loop)
-    const p = puck;
     if (p.prevX === undefined) p.prevX = p.x;
 
-    // --- CHECKING TEAM 0 (Attacking Right -> Crosses Right Line) ---
+    // --- CHECKING TEAM 0 ---
     if (team0AttacksRight) {
-        // Did puck just cross the Right Blue Line?
+        // CROSSING RIGHT LINE (Entering Zone)
         if (p.prevX <= rightLine && p.x > rightLine) {
-            // Check for premature attackers
             let early = false;
-            const carrierId = p.ownerId; // Get ID of who has it (if anyone)
+            const carrierId = p.ownerId; 
             for (const pl of players) {
                 if (pl.id === carrierId) continue;
-                if (pl.team === 0 && pl.x > rightLine + 5) { // +5 buffer
+                if (pl.team === 0 && pl.x > rightLine + 5) { 
                     early = true; 
                     break;
                 }
             }
             if (early && p.ownerId !== null && getPlayerById(p.ownerId).team === 0) {
-                 // Carrier carried it in offside -> Whistle immediately
-                 whistle("OFFSIDE");
+                 // ** FIX: NEUTRAL ZONE RIGHT **
+                 const spot = isTop ? DOTS.NZ_TOP_RIGHT : DOTS.NZ_BOT_RIGHT;
+                 whistle("OFFSIDE", spot);
             } else if (early) {
-                // Dumped in -> Delayed
                 offsideState.active = true;
                 offsideState.team = 0;
             }
         }
     } else {
-        // Team 0 Attacking Left (Crosses Left Line)
+        // CROSSING LEFT LINE
         if (p.prevX >= leftLine && p.x < leftLine) {
             let early = false;
             for (const pl of players) {
@@ -1631,7 +1651,9 @@ function checkOffsides() {
                 }
             }
             if (early && p.ownerId !== null && getPlayerById(p.ownerId).team === 0) {
-                 whistle("OFFSIDE");
+                 // ** FIX: NEUTRAL ZONE LEFT **
+                 const spot = isTop ? DOTS.NZ_TOP_LEFT : DOTS.NZ_BOT_LEFT;
+                 whistle("OFFSIDE", spot);
             } else if (early) {
                 offsideState.active = true;
                 offsideState.team = 0;
@@ -1639,14 +1661,13 @@ function checkOffsides() {
         }
     }
 
-    // --- CHECKING TEAM 1 (Attacking Left -> Crosses Left Line) ---
-    // (Assumes Team 1 starts attacking Left)
+    // --- CHECKING TEAM 1 ---
     const t1AttacksRight = !team0AttacksRight; 
     
-    if (!t1AttacksRight) { // Standard Team 1 (Right to Left)
+    if (!t1AttacksRight) { // Team 1 Attacking LEFT
          if (p.prevX >= leftLine && p.x < leftLine) {
             let early = false;
-            const carrierId = p.ownerId; // Get ID of who has it (if anyone)
+            const carrierId = p.ownerId; 
             for (const pl of players) {
                 if (pl.id === carrierId) continue;
                 if (pl.team === 1 && pl.x < leftLine - 5) {
@@ -1654,14 +1675,15 @@ function checkOffsides() {
                 }
             }
             if (early && p.ownerId !== null && getPlayerById(p.ownerId).team === 1) {
-                 whistle("OFFSIDE");
+                 // ** FIX: NEUTRAL ZONE LEFT **
+                 const spot = isTop ? DOTS.NZ_TOP_LEFT : DOTS.NZ_BOT_LEFT;
+                 whistle("OFFSIDE", spot);
             } else if (early) {
                 offsideState.active = true;
                 offsideState.team = 1;
             }
         }
-    } else {
-        // Team 1 Attacking Right
+    } else { // Team 1 Attacking RIGHT
          if (p.prevX <= rightLine && p.x > rightLine) {
             let early = false;
             for (const pl of players) {
@@ -1670,7 +1692,9 @@ function checkOffsides() {
                 }
             }
             if (early && p.ownerId !== null && getPlayerById(p.ownerId).team === 1) {
-                 whistle("OFFSIDE");
+                 // ** FIX: NEUTRAL ZONE RIGHT **
+                 const spot = isTop ? DOTS.NZ_TOP_RIGHT : DOTS.NZ_BOT_RIGHT;
+                 whistle("OFFSIDE", spot);
             } else if (early) {
                 offsideState.active = true;
                 offsideState.team = 1;
@@ -1678,30 +1702,37 @@ function checkOffsides() {
         }
     }
 
-    // 4. HANDLE DELAYED STATE
+    // 4. HANDLE DELAYED STATE (Touching the puck later)
     if (offsideState.active) {
         const offTeam = offsideState.team;
-        const lineX = (team0AttacksRight && offTeam === 0) || (!team0AttacksRight && offTeam === 1) 
-                      ? rightLine : leftLine;
+        
+        // Determine which line is the "Offensive Blue Line" for the offending team
+        const attacksRight = (offTeam === 0) ? team0AttacksRight : !team0AttacksRight;
+        const lineX = attacksRight ? rightLine : leftLine;
         
         // A. CHECK FOR TOUCH (WHISTLE)
         if (puck.ownerId !== null) {
             const owner = getPlayerById(puck.ownerId);
             if (owner.team === offTeam) {
-                whistle(`OFFSIDE`);
+                // ** FIX: Determine Spot based on Attack Direction **
+                let spot;
+                if (attacksRight) {
+                    spot = isTop ? DOTS.NZ_TOP_RIGHT : DOTS.NZ_BOT_RIGHT;
+                } else {
+                    spot = isTop ? DOTS.NZ_TOP_LEFT : DOTS.NZ_BOT_LEFT;
+                }
+                
+                whistle("OFFSIDE", spot);
                 offsideState.active = false;
                 return;
             }
         }
 
         // B. CHECK FOR TAG UP (CLEAR)
-        // If all players on offside team are OUT of the zone, clear it.
         let allClear = true;
         for (const pl of players) {
             if (pl.team === offTeam) {
-                // If attacking right, must be < line. If left, must be > line.
-                const isDeep = (team0AttacksRight && offTeam === 0) || (!team0AttacksRight && offTeam === 1)
-                               ? (pl.x > lineX) : (pl.x < lineX);
+                const isDeep = attacksRight ? (pl.x > lineX) : (pl.x < lineX);
                 if (isDeep) {
                     allClear = false;
                     break;
@@ -1709,9 +1740,7 @@ function checkOffsides() {
             }
         }
         
-        // Also clear if puck leaves zone
-        const puckOut = (team0AttacksRight && offTeam === 0) || (!team0AttacksRight && offTeam === 1)
-                        ? (p.x < lineX) : (p.x > lineX);
+        const puckOut = attacksRight ? (p.x < lineX) : (p.x > lineX);
 
         if (allClear || puckOut) {
             offsideState.active = false;
@@ -1719,9 +1748,183 @@ function checkOffsides() {
         }
     }
 
-    // Update Previous X
     p.prevX = p.x;
 }
+
+
+
+
+// ==========================================
+// ICING LOGIC (Direction-Aware Fix)
+// ==========================================
+
+// Global state tracking
+if (typeof icingState === 'undefined') {
+    window.icingState = {
+        lastTouchX: 500,  
+        lastTouchTeam: -1,
+        processed: false  
+    };
+}
+
+function checkIcing() {
+    // 1. Guard Clauses
+    if (typeof RULE_ICING !== 'undefined' && !RULE_ICING) return;
+    if (isResetActive()) {
+        icingState.processed = false;
+        return;
+    }
+
+    const p = puck;
+    const RX = 500;
+    
+    // 2. TRACKING: Update origin whenever a player HAS the puck
+    const carrier = getPuckCarrier(); 
+    if (carrier) {
+        icingState.lastTouchTeam = carrier.team;
+        icingState.lastTouchX = p.x;
+        icingState.processed = false;
+        return; 
+    }
+
+    // 3. DETECTION
+    if (icingState.processed) return;
+
+    // Get Dynamic Goal Locations
+    const g1 = (typeof goal1 !== 'undefined') ? goal1 : 175; 
+    const g2 = (typeof goal2 !== 'undefined') ? goal2 : 825; 
+
+    // Get Vertical Center (Default 300)
+    const RY = (typeof RINK_Y !== 'undefined' && typeof RINK_H !== 'undefined') ? RINK_Y + RINK_H/2 : 300;
+
+    // WAIVE OFF ZONE: If puck hits net, it's NOT icing.
+    const hittingNet = Math.abs(p.y - RY) < 22;
+
+    // --- CHECK TEAM 0 ---
+    if (icingState.lastTouchTeam === 0) {
+        // A. Shot from BEHIND Center Ice?
+        const isBehindCenter = (g1 < RX) ? (icingState.lastTouchX < RX) : (icingState.lastTouchX > RX);
+        
+        if (isBehindCenter) {
+            // B. Crossed OPPONENT'S Goal Line (g2)?
+            const crossedOppGoal = (g2 > RX) ? (p.x > g2) : (p.x < g2);
+            
+            if (crossedOppGoal) {
+                if (hittingNet) {
+                    icingState.processed = true; // Wave it off (Goal or Post)
+                } else {
+                    triggerIcingWhistle(0, p.y);
+                }
+            }
+        }
+    }
+    
+    // --- CHECK TEAM 1 ---
+    else if (icingState.lastTouchTeam === 1) {
+        // A. Shot from BEHIND Center Ice?
+        const isBehindCenter = (g2 < RX) ? (icingState.lastTouchX < RX) : (icingState.lastTouchX > RX);
+        
+        if (isBehindCenter) {
+            // B. Crossed OPPONENT'S Goal Line (g1)?
+            const crossedOppGoal = (g1 > RX) ? (p.x > g1) : (p.x < g1);
+            
+            if (crossedOppGoal) {
+                if (hittingNet) {
+                    icingState.processed = true; // Wave it off
+                } else {
+                    triggerIcingWhistle(1, p.y);
+                }
+            }
+        }
+    }
+}
+
+
+
+function triggerIcingWhistle(team, puckY) {
+    icingState.processed = true; 
+    
+    const RY = 300;
+    const isTop = (puckY < RY);
+
+    // Get Goal Locations again to determine where the faceoff goes
+    const g1 = (typeof goal1 !== 'undefined') ? goal1 : 175;
+    const g2 = (typeof goal2 !== 'undefined') ? goal2 : 825;
+    const RX = 500;
+
+    let spot;
+    
+    // Logic: Faceoff goes to the OFFENDER'S Defensive Zone
+    if (team === 0) {
+        // Team 0 is guilty. Faceoff at g1 (Team 0's net).
+        if (g1 < RX) {
+            // Team 0 is on the Left
+            spot = isTop ? DOTS.EZ_TOP_LEFT : DOTS.EZ_BOT_LEFT;
+        } else {
+            // Team 0 is on the Right (Swapped)
+            spot = isTop ? DOTS.EZ_TOP_RIGHT : DOTS.EZ_BOT_RIGHT;
+        }
+    } else {
+        // Team 1 is guilty. Faceoff at g2 (Team 1's net).
+        if (g2 < RX) {
+            // Team 1 is on the Left (Swapped)
+            spot = isTop ? DOTS.EZ_TOP_LEFT : DOTS.EZ_BOT_LEFT;
+        } else {
+            // Team 1 is on the Right
+            spot = isTop ? DOTS.EZ_TOP_RIGHT : DOTS.EZ_BOT_RIGHT;
+        }
+    }
+
+    if (typeof whistle === 'function') {
+        whistle("ICING", spot);
+    }
+}
+
+
+
+function resolveOutOfPlaySpot() {
+    // 1. Who touched it last?
+    // We use the same tracker from Icing since it's reliable.
+    const lastTeam = (typeof icingState !== 'undefined') ? icingState.lastTouchTeam : -1;
+    
+    // Default to Center if we have no clue
+    if (lastTeam === -1) return DOTS.CENTER;
+
+    // 2. Are they the Attacking Team?
+    // (If Team 0 is attacking Right, and they are Team 0, they are Attacking)
+    const t0AttacksRight = (typeof team0AttacksRight !== 'undefined') ? team0AttacksRight : true;
+    const isAttacker = (lastTeam === 0) ? t0AttacksRight : !t0AttacksRight;
+
+    // 3. Where is the puck vertically? (Top or Bottom of screen)
+    const RY = 300; 
+    const isTop = (puck.y < RY);
+
+    // 4. DECISION MATRIX
+    // A. ATTACKER TOUCHED LAST -> Penalty! Back to Neutral Zone.
+    if (isAttacker) {
+        // If puck is on Top side, go to Neutral Zone Top.
+        // We pick the NZ dot closest to the offender's blue line.
+        if (lastTeam === 0) {
+             // Team 0 is Attacking. Back to their Neutral Zone dot.
+             // If attacking Right, their Blue Line is the Left one.
+             return isTop ? DOTS.NZ_TOP_LEFT : DOTS.NZ_BOT_LEFT; 
+        } else {
+             // Team 1 is Attacking. Back to their Neutral Zone dot.
+             return isTop ? DOTS.NZ_TOP_RIGHT : DOTS.NZ_BOT_RIGHT;
+        }
+    } 
+    // B. DEFENDER TOUCHED LAST -> Punishment! Stay in Defensive Zone.
+    else {
+        if (lastTeam === 0) {
+            // Team 0 is Defending. Faceoff in their End Zone.
+            return isTop ? DOTS.EZ_TOP_LEFT : DOTS.EZ_BOT_LEFT;
+        } else {
+            // Team 1 is Defending. Faceoff in their End Zone.
+            return isTop ? DOTS.EZ_TOP_RIGHT : DOTS.EZ_BOT_RIGHT;
+        }
+    }
+}
+
 
 
 
