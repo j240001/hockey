@@ -39,6 +39,7 @@
 <script src="audio.js"></script>
 <script src="ai_skating.js"></script>
 <script src="crowd_data.js"></script>
+<script src="crowd.js"></script>
 <script src="playoffs.js"></script>
 
 <!-- TEAMS -->
@@ -105,20 +106,6 @@ let crowdEnabled = true;
 
 
 
-let masterCrowd = []; // This holds every fan's data
-let firstWhistleBlown = false; // Starts false, becomes true after the first whistle
-let currentDisappointment = 0;
-
-// --- AMBIENT TUNING (The "Normal" Look) ---
-let AMBIENT_EXCITEMENT = 0.04; // 4% of crowd moves (Try 0.02 to 0.08)
-let AMBIENT_RANGE = 0.4;      // Move +/- 0.8px (Try 0.5 to 1.5)
-let AMBIENT_SPEED = 7;       // Update every 10 frames (Higher = Calmer)
-
-// --- CURRENT LIVE STATE (The engine actually uses these) ---
-let team0Excitement = AMBIENT_EXCITEMENT; // Visitors
-let team1Excitement = AMBIENT_EXCITEMENT; // Home
-let fidgetRange = AMBIENT_RANGE;
-let fidgetSpeed = AMBIENT_SPEED;
 
 let atmosphereTint = 0.15; // Default 15% darkness
 
