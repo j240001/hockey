@@ -36,6 +36,7 @@
 <script src="trainingrewards.js"></script>
 <script src="strategies.js"></script>
 <script src="tournament.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
 <script src="audio.js"></script>
 <script src="ai_skating.js"></script>
 <script src="crowd_data.js"></script>
@@ -66,7 +67,7 @@
 <script src="node_registry.js"></script>
 <script src="strategy_interpreter.js"></script>
 <script src="ai_coach.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
+
 
 <script>
 
@@ -6408,76 +6409,6 @@ function resetAfterGoal(scoringTeam) {
 
 
 
-function getRank(teamID) {
-    // Access the standings object from tournament.js
-    if (!Tournament || !Tournament.standings) return 9;
-
-    // Convert the object into an array so we can sort it
-    const teamsArray = Object.values(Tournament.standings);
-    if (teamsArray.length === 0) return 9;
-
-    // Sort by points (highest to lowest)
-    teamsArray.sort((a, b) => b.Pts - a.Pts);
-
-    // Find the rank of the specific team
-    const index = teamsArray.findIndex(t => t.id === teamID);
-    
-    // Return rank (1-18), or 9 (middle) if team not found
-    return (index !== -1) ? (index + 1) : 9;
-}
-
-
-function calculateExodus() {
-    if (currentPeriod < 3) {
-        currentDisappointment = 0;
-        return;
-    }
-
-    let scoreDiff = scoreTeam1 - scoreTeam0; 
-
-    if (scoreDiff < 0) {
-        let intensity = Math.abs(scoreDiff) * 0.2; 
-        let timeFactor = (GAME_DURATION_SECONDS - timeRemaining) / GAME_DURATION_SECONDS; 
-        currentDisappointment = intensity * timeFactor;
-
-        // --- THE "GOODBYE" LOGIC ---
-        // Iterate through the crowd and lock in those who leave
-        masterCrowd.forEach(fan => {
-            if (fan.isHome && !fan.hasLeft) {
-                if (currentDisappointment > fan.leaverThreshold) {
-                    fan.hasLeft = true;
-                }
-            }
-        });
-    }
-}
-
-
-
-function updateCrowdVisuals() {
-    let disappointment = 0;
-
-    const awayScore = scoreTeam0; 
-    const homeScore = scoreTeam1;
-    const goalDiff = awayScore - homeScore;
-
-    // Trigger exodus if losing by 3 or more in the 3rd period
-    if (currentPeriod === 3 && goalDiff >= 3) {
-        // CALCULATE AGGRESSION:
-        // We want a "dramatic" exit. Instead of linear, we use a multiplier.
-        // As time passes, the disappointment grows much faster.
-        const timePercent = (GAME_DURATION_SECONDS - timeRemaining) / GAME_DURATION_SECONDS;
-        
-        // Raising to power of 0.5 makes it ramp up quickly early in the period
-        disappointment = Math.pow(timePercent, 0.6) * (goalDiff / 3);  // changed from 0.5 to 0.6 to increase exodus rate)
-    }
-
-    // Clamp at 1.0 (Maximum exit)
-    disappointment = Math.min(disappointment, 1.0);
-
-    generateCrowd(disappointment);
-}
-
 
 
 
@@ -8469,29 +8400,5 @@ document.addEventListener("keydown", e => {
 
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
