@@ -24,11 +24,11 @@ const Tournament = {
     init: function() {
         this.active = true;
         this.isTrainingEpisode = false;
-        this.isWarping = false;
+        this.isWarping = false; 
         this.matches = [];
         this.results = [];
         this.standings = {};
-        this.matchupStats = {};
+        this.matchupStats = {}; 
         this.currentMatchIndex = 0;
 
         const keys = Object.keys(Strategies);
@@ -37,9 +37,9 @@ const Tournament = {
         keys.forEach(k => {
             const code = Strategies[k].code || "UNK";
             this.standings[k] = { 
-                id: k, name: Strategies[k].teamName || Strategies[k].name, code: code,
+                id: k, name: Strategies[k].teamName, code: code,
                 GP:0, W:0, L:0, OTL:0, SOW:0, SOL:0, GF:0, GA:0, Pts:0,
-                totalSOGF: 0, totalSOGA: 0  
+                totalSOGF: 0, totalSOGA: 0
             };
         });
 
@@ -62,7 +62,7 @@ const Tournament = {
                     const t2 = currentTeams[numTeams - 1 - i];
                     if (t1 === "BYE" || t2 === "BYE") continue;
                     if (season % 2 === 0) roundMatches.push({ home: t1, away: t2 });
-                    else                  roundMatches.push({ home: t2, away: t1 });
+                    else             roundMatches.push({ home: t2, away: t1 });
                 }
                 roundMatches.sort(() => Math.random() - 0.5);
                 this.matches.push(...roundMatches);
@@ -72,22 +72,6 @@ const Tournament = {
                 currentTeams = [fixed, ...tail];
             }
         }
-
-        const TARGET_GP = 82;
-        const balancedMatches = [];
-        const teamCounts = {};
-        keys.forEach(k => teamCounts[k] = 0);
-
-        // Filter the generated schedule (which has excess games)
-        // Only schedule a game if BOTH teams need it to reach 82
-        for (const m of this.matches) {
-            if (teamCounts[m.home] < TARGET_GP && teamCounts[m.away] < TARGET_GP) {
-                balancedMatches.push(m);
-                teamCounts[m.home]++;
-                teamCounts[m.away]++;
-            }
-        }
-        this.matches = balancedMatches;
 
         console.log(`🏆 SEASON READY: ${this.matches.length} matches.`);
         this.startNextMatch(); 
@@ -238,18 +222,16 @@ startNextMatch: function() {
                         startNextPeriod(); 
                         if (!this.watchMode) faceoffPauseUntil = 0; 
                     } else {
-                        if (scoreTeam0 === scoreTeam1) {
-                            if (currentPeriod >= 4) {
-                                this.resolveShootout();
-                                return;
-                            }
+                        if (scoreTeam0 === scoreTeam1 && currentPeriod >= 4) {
+                            this.resolveShootout();
+                            return;
+                        } else if (scoreTeam0 !== scoreTeam1) {
+                            this.recordResult(false);
+                            return; 
+                        } else {
                             currentPeriod++;
                             timeRemaining = GAME_DURATION_SECONDS;
-                            startNextPeriod();
-                            if (!this.watchMode) faceoffPauseUntil = 0;
-                        } else {
-                            this.recordResult(false); 
-                            return; 
+                            doFaceoffReset(nextFaceoffSpot.x, nextFaceoffSpot.y);
                         }
                     }
                 }
