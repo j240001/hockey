@@ -671,44 +671,6 @@ const MIN_SKATERS = 0;
 
 
 
-// =========================================================
-// FACEOFF PLAYBOOKS (Relative to the Dot)
-// =========================================================
-// x: Distance BEHIND the dot (negative is back towards own goalie)
-// y: Distance to SIDE (negative=Left, positive=Right relative to goalie view)
-// facing: "puck", "opponent", "net", "vertical"
-
-const FACEOFF_STRATEGIES = {
-    // 1. NEUTRAL ZONE (Standard Center Ice)
-    "NEUTRAL": {
-        "C":  { x: -18,  y: 0,   facing: "opponent" },
-        "LW": { x: -30,  y: -70, facing: "puck" },
-        "RW": { x: -30,  y: 70,  facing: "puck" },
-        "LD": { x: -100, y: -50, facing: "puck" },
-        "RD": { x: -100, y: 50,  facing: "puck" }
-    },
-
-    // 2. OFFENSIVE ZONE (Aggressive - Attack the net)
-    "OFFENSIVE": {
-        "C":  { x: -20, y: 0,   facing: "opponent" },
-        "LW": { x: -25, y: -65, facing: "puck" }, // Wingers tighter to circle
-        "RW": { x: -25, y: 65,  facing: "puck" }, 
-        "LD": { x: -90, y: -15, facing: "net" },  // Defense ready to shoot
-        "RD": { x: -90, y: 15,  facing: "net" }
-    },
-
-    // 3. DEFENSIVE ZONE (Protective - Inside leverage)
-    "DEFENSIVE": {
-        "C":  { x: -20, y: 0,   facing: "opponent" },
-        "LW": { x: -50, y: -35, facing: "puck" }, // Collapsed slightly
-        "RW": { x: -50, y: 35,  facing: "puck" },
-        "LD": { x: -45, y: -20, facing: "puck" }, // D-men inside the dot to block
-        "RD": { x: -45, y: 20,  facing: "puck" }
-    },
-
-    // Fallback
-    "default": { x: -100, y: 0, facing: "puck" }
-};
 
 
 
@@ -1132,21 +1094,7 @@ const offctx = offscreenCanvas.getContext("2d");
 // =========================================================
 // RINK GEOMETRY
 // =========================================================
-const RINK_W = 800;
-const RINK_H = 340;
-const RINK_X = (W - RINK_W) / 2; // 100
-const RINK_Y = 150;
-
-
-
-const R = 100;
-const STEPS = 6;
-
 ctx.imageSmoothingEnabled = false;
-
-// TRUE RINK CENTER
-const RX = RINK_X + RINK_W/2; // 500
-const RY = RINK_Y + RINK_H/2; // 320
 
 let team0AttacksRight = true;  // Flip on every period end
 
@@ -1155,8 +1103,6 @@ let team0AttacksRight = true;  // Flip on every period end
 // ——————————————————————————————————————————————
 // CRITICAL FIX: ALL PLAYER C HELPERS — MUST BE HERE
 // ——————————————————————————————————————————————
-const LEFT_BLUE_LINE  = RX - 110;
-const RIGHT_BLUE_LINE = RX + 110;
 
 
 
@@ -1165,24 +1111,6 @@ const RIGHT_BLUE_LINE = RX + 110;
 // =========================================================
 // FACEOFF LOCATIONS (Geometry Definitions)
 // =========================================================
-const DOTS = {
-    CENTER: { x: RX, y: RY },
-
-    // NEUTRAL ZONE (Outside Blue Lines)
-    // Your Blue Lines are at RX +/- 110. Dots should be approx +/- 135
-    NZ_TOP_LEFT:    { x: RX - 91, y: RY - 89 },
-    NZ_BOT_LEFT:    { x: RX - 91, y: RY + 89 },
-    NZ_TOP_RIGHT:   { x: RX + 91, y: RY - 89 },
-    NZ_BOT_RIGHT:   { x: RX + 91, y: RY + 89 },
-
-    // END ZONES (Inside Circles)
-    // Goals are at RX +/- 325. Dots usually ~20-30px from goal line?
-    // Let's estimate them at +/- 265
-    EZ_TOP_LEFT:    { x: RX - 258, y: RY - 89 }, // Defending Zone Team 0
-    EZ_BOT_LEFT:    { x: RX - 258, y: RY + 89 },
-    EZ_TOP_RIGHT:   { x: RX + 258, y: RY - 89 }, // Defending Zone Team 1
-    EZ_BOT_RIGHT:   { x: RX + 258, y: RY + 89 }
-};
 
 
 let nextFaceoffSpot = DOTS.CENTER; // Default to Center
@@ -1228,14 +1156,6 @@ function lateralClear(p, dir) {
 
 
 
-// Re-using the roster positions for spawn coordinates
-const ROSTER_POSITIONS = [
-    { role: "C",  x: 20, y: 0 },
-    { role: "RW", x: 20, y: 55 },   
-    { role: "LD", x: 100, y: -55 }, 
-    { role: "LW", x: 20, y: -55 },  
-    { role: "RD", x: 100, y: 55 }   
-];
 
 function applyPendingRosterChanges() {
     // 1. Process Team 0
