@@ -53,6 +53,9 @@ const Tournament = {
         let seasonLoops = Math.ceil(TARGET_GAMES / gamesPerCycle);
         if (seasonLoops < 1) seasonLoops = 1;
 
+        const gameCounts = {};
+        keys.forEach(k => { gameCounts[k] = 0; });
+
         for (let season = 0; season < seasonLoops; season++) {
             let currentTeams = [...teams]; 
             for (let r = 0; r < gamesPerCycle; r++) {
@@ -61,8 +64,13 @@ const Tournament = {
                     const t1 = currentTeams[i];
                     const t2 = currentTeams[numTeams - 1 - i];
                     if (t1 === "BYE" || t2 === "BYE") continue;
-                    if (season % 2 === 0) roundMatches.push({ home: t1, away: t2 });
-                    else             roundMatches.push({ home: t2, away: t1 });
+
+                    if (gameCounts[t1] < TARGET_GAMES && gameCounts[t2] < TARGET_GAMES) {
+                        if (season % 2 === 0) roundMatches.push({ home: t1, away: t2 });
+                        else             roundMatches.push({ home: t2, away: t1 });
+                        gameCounts[t1]++;
+                        gameCounts[t2]++;
+                    }
                 }
                 roundMatches.sort(() => Math.random() - 0.5);
                 this.matches.push(...roundMatches);
@@ -72,6 +80,9 @@ const Tournament = {
                 currentTeams = [fixed, ...tail];
             }
         }
+        
+        // Truncate the schedule to exactly 738 games for an 82-game season per team.
+        this.matches = this.matches.slice(0, 738);
 
         console.log(`🏆 SEASON READY: ${this.matches.length} matches.`);
         this.startNextMatch(); 
